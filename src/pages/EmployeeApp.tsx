@@ -1,9 +1,12 @@
+import PunchPanel, { clearScan, scannedToken } from './PunchPanel';
+import { usePunches } from '../data/punches';
+import { checkDay, fmtMin, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import { useEffect, useMemo, useState } from 'react';
-import { addDays, fmtDate, monthDays, todayIso, weekday } from '../domain/dates';
+import { addDays, fmtDate, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
 import { holidayName } from '../domain/holidays';
 import { dayEntry, hrSummary } from '../domain/hrExport';
 import { REASON_LABEL, TYPE_LABEL } from '../domain/types';
-import type { AbsenceReason } from '../domain/types';
+import type { AbsenceReason, Worker } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { t } from '../i18n';
 import { disablePush, enablePush, isIos, isStandalone, pushState } from '../push';
@@ -105,8 +108,42 @@ function PushCard() {
   );
 }
 
+function MyPunches({ w }: { w: Worker }) {
+  const { state } = useApp();
+  const today = todayIso();
+  const { punches } = usePunches(addDays(today, -7), addDays(today, 1));
+  const nowH = new Date().getHours() + new Date().getMinutes() / 60;
+  const days = Array.from({ length: 7 }, (_, i) => addDays(today, -i));
+  const rows = days.map((d) => checkDay(state, w, d, punches, d === today ? nowH : 99)).filter((r) => r.plan || r.punches.length);
+  if (!rows.length) return null;
+  return (
+    <section className="card">
+      <h3 style={{ marginTop: 0 }}>{t('Moje odbicia')}</h3>
+      {rows.map((r) => (
+        <div key={r.date} className="list-item">
+          <span style={{ width: 64, fontWeight: 600 }}>{fmtDate(r.date)}</span>
+          <span className="grow sub">
+            {r.plan ? fmtRange(r.plan.start, r.plan.end - r.plan.start) : t('wolne')}
+            {' · '}
+            {r.firstIn !== undefined ? fmtMin(Math.round(r.firstIn * 60)) : '—'} – {r.lastOut !== undefined ? fmtMin(Math.round(r.lastOut * 60)) : '—'}
+          </span>
+          <span className={`tag ${STATUS_TONE[r.status]}`}>{t(STATUS_LABEL[r.status])}{r.lateMin ? ` ${r.lateMin} min` : ''}</span>
+        </div>
+      ))}
+      <div className="sub">{t('Odbijasz się, skanując kod QR na ekranie przy wejściu.')}</div>
+    </section>
+  );
+}
+
 export default function EmployeeApp({ previewId }: { previewId?: string }) {
   const { state, backend, user, reload } = useApp();
+  const [scan, setScan] = useState<string | null>(() => (previewId ? null : scannedToken()));
+  useEffect(() => {
+    if (previewId) return;
+    const on = () => setScan(scannedToken());
+    window.addEventListener('hashchange', on);
+    return () => window.removeEventListener('hashchange', on);
+  }, [previewId]);
   const [month, setMonth] = useState(todayIso().slice(0, 7));
   const w = previewId ? state.workers.find((x) => x.id === previewId) : state.workers[0];
   const today = todayIso();
@@ -165,6 +202,15 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
           <div className="card empty">{t('Twoje konto nie jest jeszcze powiązane z pracownikiem. Poproś przełożonego o sprawdzenie.')}</div>
         ) : (
           <>
+            {scan && (
+              <PunchPanel
+                token={scan}
+                onDone={() => {
+                  clearScan();
+                  setScan(null);
+                }}
+              />
+            )}
             <section className="card">
               <div className="sub">{previewId ? `${t('Podgląd aplikacji pracownika')} · ${w.email ?? ''}` : user}</div>
               <h1 style={{ fontSize: 22 }}>{w.name}</h1>
@@ -192,6 +238,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
             </section>
 
             {!previewId && <PushCard />}
+            {!previewId && <MyPunches w={w} />}
 
             <section className="card">
               <div className="card-head">

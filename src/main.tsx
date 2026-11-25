@@ -12,6 +12,8 @@ import Matrix from './pages/Matrix';
 import Obsada from './pages/Obsada';
 import Pracownicy from './pages/Pracownicy';
 import Ustawienia from './pages/Ustawienia';
+import Kiosk from './pages/Kiosk';
+import Rcp from './pages/Rcp';
 import './index.css';
 
 createRoot(document.getElementById('root')!).render(
@@ -25,16 +27,19 @@ createRoot(document.getElementById('root')!).render(
 function Root() {
   const { role } = useApp();
   if (role === 'employee') return <EmployeeApp />;
+  if (role === 'kiosk') return <Kiosk />;
   return (
       <HashRouter>
         <Routes>
           <Route path="podglad/:id" element={<Preview />} />
+          <Route path="kiosk" element={<Kiosk />} />
           <Route element={<Layout />}>
             <Route index element={<Obsada />} />
             <Route path="grafik" element={<Grafik />} />
             <Route path="matrix" element={<Matrix />} />
             <Route path="pracownicy" element={<Pracownicy />} />
             <Route path="linie" element={<Linie />} />
+            <Route path="rcp" element={<Rcp />} />
             <Route path="historia" element={<Historia />} />
             <Route path="ustawienia" element={<Ustawienia />} />
             <Route path="wiecej" element={<More />} />

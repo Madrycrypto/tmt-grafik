@@ -102,7 +102,7 @@ export function cloudBackend(cfg: CloudConfig): Backend {
     async load() {
       const rows: RecordRow[] = [];
       for (let from = 0; ; from += 1000) {
-        const { data, error } = await client.from('records').select('kind,id,data').range(from, from + 999);
+        const { data, error } = await client.from('records').select('kind,id,data').neq('kind', 'punches').range(from, from + 999);
         if (error) throw error;
         rows.push(...(data as RecordRow[]));
         if (!data || data.length < 1000) break;

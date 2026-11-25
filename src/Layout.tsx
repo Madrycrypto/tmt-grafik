@@ -8,6 +8,7 @@ export const NAV = [
   { to: '/grafik', label: 'Grafik brygad', short: 'Grafik', icon: 'grafik', mobile: true },
   { to: '/matrix', label: 'Matrix kompetencji', short: 'Matrix', icon: 'matrix', mobile: true },
   { to: '/pracownicy', label: 'Pracownicy', short: 'Ludzie', icon: 'ludzie', mobile: true },
+  { to: '/rcp', label: 'RCP — obecność', short: 'RCP', icon: 'rcp' },
   { to: '/linie', label: 'Linie i stanowiska', icon: 'linie' },
   { to: '/historia', label: 'Historia zmian', icon: 'historia' },
   { to: '/ustawienia', label: 'Ustawienia', icon: 'ustawienia' },

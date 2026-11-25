@@ -21,6 +21,7 @@ const ROLE_INFO: Record<StaffRole, string> = {
   admin: t('admin — wszystko + zarządzanie dostępem'),
   editor: t('edytor — zmienia grafik, obsadę, matrycę'),
   viewer: t('podgląd — tylko ogląda'),
+  kiosk: t('kiosk — tablet przy wejściu, pokazuje tylko kod QR do odbić'),
 };
 
 /** Lista osób z dostępem do aplikacji. Widoczna tylko dla admina w trybie z bazą. */

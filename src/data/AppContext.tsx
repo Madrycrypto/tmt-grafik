@@ -12,7 +12,7 @@ import type { Backend } from './backend';
 import { t } from '../i18n';
 
 type SyncStatus = 'idle' | 'saving' | 'error';
-export type Role = 'admin' | 'editor' | 'viewer' | 'employee';
+export type Role = 'admin' | 'editor' | 'viewer' | 'employee' | 'kiosk';
 
 interface AppCtx {
   state: AppState;
