@@ -36,6 +36,20 @@ Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągły
 
 Bez skonfigurowanej bazy aplikacja działa w **trybie demo** na danych przykładowych zapisanych tylko w przeglądarce.
 
+## Aplikacja pracownika
+
+- Pracownik widzi tylko swój grafik, nieobecności i godziny (w tym godziny na stanowiskach). Baza nie wydaje mu danych innych osób.
+- **Aktywacja kodem, bez e-maili:** *Pracownicy* → wpisz e-mail → zaznacz → „Zaproś do aplikacji”. Drukują się kartki z kodem QR i 6-znakowym kodem (PL/中文). Kod jest jednorazowy i ważny 14 dni. Zapomniane hasło: „Nowy kod + kartka”.
+- **Powiadomienia push** o zmianach w grafiku na najbliższe 14 dni, w języku pracownika (funkcja serwerowa `supabase/functions/tmt-api`).
+- Wymaga: `supabase/schema-pracownicy.sql`, wdrożonej funkcji `tmt-api` (bez weryfikacji JWT; sama sprawdza uprawnienia) oraz wyłączonego **Authentication → Sign In / Providers → Email → Confirm email** (konto i tak założy tylko osoba z listy i z ważnym kodem).
+- iPhone: powiadomienia po dodaniu aplikacji do ekranu początkowego. Telefony bez usług Google mogą nie dostawać powiadomień w Chrome.
+
+## Mieszane 8 h i 12 h
+
+- Na stałe: karta pracownika → „Długość zmiany: 12 h”. W systemie 8 h zmiana poranna to 07–19, popołudniowa 11–23, nocna 19–07.
+- Na jeden dzień: *Obsada* → przycisk „→ 12 h” przy osobie.
+- Eksport dla kadr ma format „Godziny na stanowiskach (premie)”.
+
 ## Uruchomienie lokalnie
 
 ```bash
