@@ -1,0 +1,308 @@
+import { useMemo, useState } from 'react';
+import { uid } from '../domain/actions';
+import { WEEKDAY_LONG, WEEKDAY_SHORT, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
+import { baseCode, brigadeMonth, gapsOnDay, patternShiftCodes, summarize } from '../domain/rota';
+import type { RotaCell } from '../domain/rota';
+import { BRIGADES, OFF } from '../domain/types';
+import type { BrigadeId, Exclusion } from '../domain/types';
+import { useApp } from '../data/AppContext';
+import { usePersistent } from '../ui';
+
+const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
+
+export default function Grafik() {
+  const { state, update } = useApp();
+  const [month, setMonth] = useState(todayIso().slice(0, 7));
+  const [patternId, setPatternId] = usePersistent('pattern', state.patterns[0]?.id ?? '');
+  const pattern = state.patterns.find((p) => p.id === patternId) ?? state.patterns[0];
+  const days = monthDays(month);
+  const label = (code: string) => (code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
+
+  const rows = useMemo(
+    () => (pattern ? BRIGADES.map((b) => ({ b, cells: brigadeMonth(state, pattern.id, b, month) })) : []),
+    [state, pattern, month],
+  );
+  const summary = useMemo(() => (pattern ? summarize(state, pattern.id, month) : []), [state, pattern, month]);
+  const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
+
+  if (!pattern) return <div className="card empty">Brak zdefiniowanych wzorców zmian (Ustawienia).</div>;
+  const codes = patternShiftCodes(pattern);
+
+  const cycle = (b: BrigadeId, c: RotaCell) => {
+    const options = [...codes, OFF];
+    const next = options[(options.indexOf(c.code) + 1) % options.length];
+    const base = baseCode(pattern, b, c.date);
+    update((d) => {
+      d.rotaOverrides = d.rotaOverrides.filter((o) => !(o.patternId === pattern.id && o.brigade === b && o.date === c.date));
+      if (next !== base) d.rotaOverrides.push({ id: uid('ro'), patternId: pattern.id, brigade: b, date: c.date, code: next });
+    }, `Grafik ${pattern.name}: brygada ${b}, ${c.date} → ${label(next)}`);
+  };
+
+  const setTarget = (b: BrigadeId | 'all', value: string) => {
+    const n = value === '' ? undefined : Math.max(0, Math.min(31, Number(value)));
+    update((d) => {
+      let t = d.targets.find((x) => x.patternId === pattern.id && x.month === month);
+      if (!t) {
+        t = { id: `${pattern.id}:${month}`, patternId: pattern.id, month, days: {} };
+        d.targets.push(t);
+      }
+      for (const br of b === 'all' ? BRIGADES : [b]) {
+        if (n === undefined) delete t.days[br];
+        else t.days[br] = n;
+      }
+    });
+  };
+
+  const membersOf = (b: BrigadeId) => state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b).length;
+
+  return (
+    <>
+      <div className="page-head">
+        <div>
+          <div className="sub">Ruch ciągły · 4 brygady · kliknij komórkę, aby zmienić zmianę ręcznie</div>
+          <h1>Grafik brygad</h1>
+        </div>
+        <div className="row">
+          <label className="field">
+            Wzorzec
+            <select value={pattern.id} onChange={(e) => setPatternId(e.target.value)}>
+              {state.patterns.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
+            Miesiąc
+            <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
+          </label>
+        </div>
+      </div>
+
+      <section className="card">
+        <div className="scroll-x">
+          <table style={{ minWidth: 40 * days.length + 220, tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th className="sticky-col" style={{ width: 96 }}>Brygada</th>
+                {days.map((d) => (
+                  <th key={d} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 ? 'var(--red-ink)' : undefined }}>
+                    {WEEKDAY_SHORT[weekday(d)]}
+                    <br />
+                    {d.slice(8)}
+                  </th>
+                ))}
+                <th style={{ width: 120, textAlign: 'center' }}>Dni / cel · godz.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ b, cells }) => {
+                const s = summary.find((x) => x.brigade === b)!;
+                return (
+                  <tr key={b}>
+                    <td className="sticky-col" style={{ fontWeight: 700 }}>
+                      <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
+                      {b}
+                      <div className="sub" style={{ fontWeight: 400 }} title="pracownicy w tym systemie na wszystkich liniach">{membersOf(b)} os.</div>
+                    </td>
+                    {cells.map((c) => {
+                      const cls =
+                        c.status === 'excluded' ? 'c-excluded' : c.status === 'trimmed' ? 'c-trimmed' : `c-${c.status === 'off' ? 'W' : c.code}`;
+                      const title =
+                        c.status === 'excluded'
+                          ? 'wyłączone (kalendarz zakładu)'
+                          : c.status === 'trimmed'
+                            ? 'dodatkowe wolne (cel dni)'
+                            : c.overridden
+                              ? 'zmienione ręcznie'
+                              : '';
+                      return (
+                        <td key={c.date} style={{ padding: '4px 2px' }}>
+                          <button type="button" className={`cell ${cls} ${c.overridden ? 'c-ov' : ''}`} title={`${c.date} ${label(c.code)} ${title}`} onClick={() => cycle(b, c)}>
+                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? 'w' : label(c.code)}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                      {s.days}
+                      {s.target !== undefined ? ` / ${s.target}` : ''} · {s.hours} h
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr>
+                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }}>Luki</td>
+                {days.map((d) => {
+                  const g = gapsOnDay(state, pattern.id, d);
+                  return (
+                    <td key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--red-ink)', padding: '4px 2px' }} title={g.length ? 'Brak brygady na zmianie — obsadź 12 h, agencją lub nadgodzinami' : ''}>
+                      {g.map(label).join(' ')}
+                    </td>
+                  );
+                })}
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="legend" style={{ marginTop: 12 }}>
+          {codes.map((c) => {
+            const def = state.shiftDefs.find((s) => s.code === c);
+            return (
+              <span key={c}>
+                <span className={`cell c-${c}`}>{label(c)}</span>
+                {def ? fmtRange(def.start, def.hours) : c}
+              </span>
+            );
+          })}
+          <span><span className="cell c-W">W</span>wolne</span>
+          <span><span className="cell c-trimmed">w</span>dodatkowe wolne (cel dni)</span>
+          <span><span className="cell c-excluded">✕</span>wyłączone</span>
+          <span><span className="cell c-W c-ov">R</span>zmiana ręczna</span>
+        </div>
+      </section>
+
+      <div className="split">
+        <section className="card main-col">
+          <div className="card-head">
+            <h2>Docelowa liczba dni pracy — {month}</h2>
+          </div>
+          <p className="sub" style={{ marginTop: 0 }}>
+            Generator zostawia każdej brygadzie dokładnie tyle dni, nadwyżkę zamienia na wolne rozłożone równomiernie. Puste pole = pełny cykl.
+          </p>
+          <div className="row">
+            <label className="field" style={{ width: 120 }}>
+              Wszystkie
+              <input type="number" min={0} max={31} placeholder="np. 20" onBlur={(e) => e.target.value && setTarget('all', e.target.value)} />
+            </label>
+            {BRIGADES.map((b) => (
+              <label key={b} className="field" style={{ width: 90 }}>
+                Brygada {b}
+                <input type="number" min={0} max={31} value={target?.days[b] ?? ''} onChange={(e) => setTarget(b, e.target.value)} />
+              </label>
+            ))}
+          </div>
+          {summary.some((s) => s.target !== undefined && s.days < s.target) && (
+            <div className="note amber" style={{ marginTop: 10 }}>
+              Cykl daje mniej dni niż cel dla brygad: {summary.filter((s) => s.target !== undefined && s.days < s.target).map((s) => `${s.brigade} (${s.days}/${s.target})`).join(', ')}. Dodaj zmiany ręcznie, klikając w komórki.
+            </div>
+          )}
+          {summary.some((s) => s.weeksWithoutRest.length) && (
+            <div className="note" style={{ marginTop: 10 }}>
+              Tygodnie z odpoczynkiem krótszym niż 35 h (Kodeks pracy dopuszcza 24 h przy zmianie zmiany, art. 133 § 2):{' '}
+              {summary
+                .filter((s) => s.weeksWithoutRest.length)
+                .map((s) => `${s.brigade}: ${s.weeksWithoutRest.map((w) => `od ${w.week.slice(8)}.${w.week.slice(5, 7)} (${w.rest} h)`).join(', ')}`)
+                .join(' · ')}
+            </div>
+          )}
+        </section>
+        <Exclusions />
+      </div>
+    </>
+  );
+}
+
+function Exclusions() {
+  const { state, update } = useApp();
+  const [kind, setKind] = useState<'weekly' | 'date'>('weekly');
+  const [wd, setWd] = useState(0);
+  const [date, setDate] = useState(todayIso());
+  const [codes, setCodes] = useState<string[]>([]);
+  const [note, setNote] = useState('');
+
+  const describe = (e: Exclusion) =>
+    `${e.kind === 'weekly' ? `Co tydzień: ${WEEKDAY_LONG[e.weekday ?? 0]}` : `Dzień ${e.date}`} — ${e.shiftCodes
+      .map((c) => {
+        const d = state.shiftDefs.find((s) => s.code === c);
+        return d ? `${d.label} ${fmtRange(d.start, d.hours)}` : c;
+      })
+      .join(', ')}`;
+
+  const add = () => {
+    if (!codes.length) return;
+    const ex: Exclusion = { id: uid('ex'), kind, shiftCodes: codes, note: note || undefined, ...(kind === 'weekly' ? { weekday: wd } : { date }) };
+    update((d) => {
+      d.exclusions.push(ex);
+    }, `Dodano wyłączenie: ${describe(ex)}`);
+    setCodes([]);
+    setNote('');
+  };
+
+  return (
+    <section className="card side-col">
+      <div className="card-head">
+        <h2>Kalendarz zakładu — wyłączenia</h2>
+      </div>
+      {state.exclusions.length === 0 && <div className="sub">Brak wyłączeń.</div>}
+      {state.exclusions.map((e) => (
+        <div key={e.id} className="list-item">
+          <div className="grow">
+            <div style={{ fontWeight: 600, fontSize: 14 }}>{describe(e)}</div>
+            {e.note && <div className="sub">{e.note}</div>}
+          </div>
+          <button
+            type="button"
+            className="btn small"
+            onClick={() =>
+              update((d) => {
+                d.exclusions = d.exclusions.filter((x) => x.id !== e.id);
+              }, `Usunięto wyłączenie: ${describe(e)}`)
+            }
+          >
+            Usuń
+          </button>
+        </div>
+      ))}
+      <div className="stack" style={{ marginTop: 12 }}>
+        <div className="row">
+          <label className="field">
+            Rodzaj
+            <select value={kind} onChange={(e) => setKind(e.target.value as 'weekly' | 'date')}>
+              <option value="weekly">co tydzień</option>
+              <option value="date">konkretny dzień</option>
+            </select>
+          </label>
+          {kind === 'weekly' ? (
+            <label className="field">
+              Dzień tygodnia
+              <select value={wd} onChange={(e) => setWd(Number(e.target.value))}>
+                {[1, 2, 3, 4, 5, 6, 0].map((i) => (
+                  <option key={i} value={i}>
+                    {WEEKDAY_LONG[i]}
+                  </option>
+                ))}
+              </select>
+            </label>
+          ) : (
+            <label className="field">
+              Data
+              <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
+            </label>
+          )}
+        </div>
+        <div className="row" role="group" aria-label="Zmiany do wyłączenia">
+          {state.shiftDefs.map((s) => (
+            <label key={s.code} className="tag" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '6px 10px', fontSize: 12 }}>
+              <input
+                type="checkbox"
+                checked={codes.includes(s.code)}
+                onChange={(e) => setCodes(e.target.checked ? [...codes, s.code] : codes.filter((c) => c !== s.code))}
+              />
+              {s.label} {fmtRange(s.start, s.hours)}
+            </label>
+          ))}
+        </div>
+        <label className="field">
+          Opis (opcjonalnie)
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="np. postój planowy, święto" />
+        </label>
+        <button type="button" className="btn primary" disabled={!codes.length} onClick={add}>
+          Dodaj wyłączenie
+        </button>
+      </div>
+    </section>
+  );
+}

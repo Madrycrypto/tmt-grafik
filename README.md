@@ -1,0 +1,93 @@
+# TMT Grafik — brygady A/B/C/D, matrix kompetencji, zastępstwa
+
+Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągłym. Działa w przeglądarce na komputerze i na telefonie. Na telefonie można ją dodać do ekranu głównego jak zwykłą aplikację.
+
+## Co potrafi
+
+- **Uniwersalne linie i stanowiska**: dowolna liczba linii, dla każdego stanowiska wymagana liczba osób i minimalny poziom kompetencji.
+- **Mieszany czas pracy**: pracownicy 8 h (PL), 12 h (CN) i agencja (8 lub 12 h) na jednej linii. Pokrycie liczone jest **dla każdej godziny**, więc widać np. dziurę 19:00–23:00.
+- **Generator rotacji 4 brygad** (system 8 h i 12 h):
+  - docelowa liczba dni pracy na brygadę w miesiącu; nadwyżka zamienia się w wolne rozłożone równomiernie,
+  - kalendarz zakładu z wyłączeniami, np. „niedziela, noc 23–07 nie pracujemy”, święta, postoje,
+  - ręczna zmiana komórki jednym kliknięciem,
+  - wiersz „Luki” pokazujący zmiany bez brygady,
+  - kontrola 35 h odpoczynku tygodniowego.
+- **Matrix 1–4**: stanowisko samodzielnie obsadza się od poziomu 3 (próg ustawiany per stanowisko). Pod tabelą liczba osób z wymaganym poziomem w każdej brygadzie, z alarmem, gdy jest mniej niż 2.
+- **Zastępstwa kaskadowe**: po kliknięciu „Brak” aplikacja podpowiada do 3 wariantów:
+  - osoba z rezerwy,
+  - przesunięcie z innego stanowiska razem z podpowiedzią, kto zastąpi przesuniętego (do 3 ruchów),
+  - dodatkowa zmiana lub agencja, tylko z zachowaniem 11 h odpoczynku.
+
+  Pokazuje też osoby „zablokowane”, czyli jedyne kwalifikowane na swoim stanowisku. Wariant zatwierdzasz jednym kliknięciem, a wpis trafia do historii.
+- **Synchronizacja na żywo** między telefonem a komputerem (Supabase Realtime).
+- **Bezpieczeństwo**: logowanie, token JWT przy każdym zapytaniu, lista dozwolonych e-maili z rolami `admin` / `editor` / `viewer`.
+
+Bez skonfigurowanej bazy aplikacja działa w **trybie demo** na danych przykładowych zapisanych tylko w przeglądarce.
+
+## Uruchomienie lokalnie
+
+```bash
+npm install
+npm run dev      # http://localhost:5173
+npm test         # testy logiki (rotacja, pokrycie, zastępstwa, 11 h)
+npm run build
+```
+
+## Konfiguracja bazy (Supabase), jednorazowo
+
+1. Na [supabase.com](https://supabase.com) utwórz projekt w regionie **Central EU (Frankfurt)**.
+2. Otwórz **SQL Editor → New query**, wklej plik [`supabase/schema.sql`](supabase/schema.sql) i kliknij **Run**.
+3. Dodaj siebie do listy dostępu (w SQL Editor):
+   ```sql
+   insert into public.allowed_users (email, role) values ('twoj.email@firma.pl', 'admin');
+   ```
+   Kolejne osoby dodajesz tak samo. Role:
+   - `editor` może zmieniać dane,
+   - `viewer` ma tylko podgląd,
+   - `admin` może dodatkowo wczytywać kopie danych.
+4. **Authentication → Users → Add user**: utwórz konto (e-mail + hasło) dla każdej osoby z listy.
+5. **Authentication → Sign In / Providers → Email**: wyłącz **Allow new users to sign up**, żeby nikt obcy nie zakładał kont.
+6. **Project Settings → API**: skopiuj *Project URL* i klucz *anon public*.
+7. Klucze podaj na jeden z dwóch sposobów:
+   - **Na stałe w wersji online**: GitHub → repozytorium → *Settings → Secrets and variables → Actions → New repository secret*: `VITE_SUPABASE_URL` oraz `VITE_SUPABASE_ANON_KEY`. Potem uruchom wdrożenie ponownie (zakładka *Actions*).
+   - **Tylko w jednej przeglądarce**: w aplikacji *Ustawienia → Baza danych → Połącz*.
+8. Pustą bazę możesz wypełnić danymi przykładowymi (*Ustawienia → Dane → Wgraj dane przykładowe*) albo od razu wpisać swoje linie i ludzi.
+
+> Klucz `anon` jest przeznaczony do przeglądarki. Sam w sobie nie daje dostępu do danych, bo baza wpuszcza tylko zalogowanych z listy `allowed_users`. **Klucza `service_role` nigdy nie wpisuj do aplikacji ani repozytorium.**
+
+## Publikacja online
+
+### Wariant A: GitHub Pages (repozytorium publiczne)
+
+1. Repozytorium → *Settings → Pages → Source: **GitHub Actions***.
+2. Każdy `push` do `main` uruchamia testy, build i publikację. Adres to `https://<login>.github.io/<repo>/`.
+
+W repozytorium jest tylko kod. Dane pracowników są wyłącznie w Supabase, za logowaniem.
+
+### Wariant B: repozytorium prywatne + Cloudflare Pages (darmowe)
+
+1. [dash.cloudflare.com](https://dash.cloudflare.com) → *Workers & Pages → Create → Pages → Connect to Git* → wybierz repozytorium.
+2. Ustaw build command `npm run build` i output directory `dist`.
+3. W *Environment variables* dodaj `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` oraz `NODE_VERSION` = `22`.
+4. W tym wariancie usuń `.github/workflows/deploy.yml` albo wyłącz GitHub Pages.
+
+## Na telefonie
+
+Otwórz adres aplikacji, a następnie:
+- iPhone (Safari): **Udostępnij → Do ekranu początkowego**,
+- Android (Chrome): **⋮ → Dodaj do ekranu głównego**.
+
+## Struktura
+
+```
+src/domain/     logika bez interfejsu: rotacja, pokrycie godzinowe, zastępstwa (+ testy)
+src/data/       tryb demo (localStorage) i Supabase (zapis, realtime, logowanie)
+src/pages/      ekrany: Obsada, Grafik, Matrix, Pracownicy, Linie, Historia, Ustawienia
+supabase/       schemat bazy z regułami dostępu
+```
+
+## Założenia do weryfikacji z kadrami
+
+- Zmiana należy do dnia, w którym się zaczyna (nocka 23–07 z niedzieli to „niedziela N”).
+- Kontrola tygodniowa zgłasza tygodnie z odpoczynkiem poniżej 35 h. Art. 133 § 2 KP dopuszcza 24 h przy zmianie zmiany, więc to informacja, a nie blokada.
+- Normę godzin w okresie rozliczeniowym ustawiasz pośrednio przez docelową liczbę dni brygad.
