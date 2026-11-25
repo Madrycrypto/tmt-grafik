@@ -8,6 +8,7 @@ import { OFF, REASON_LABEL, canPair, linePatterns } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
+import { WorkerEditor } from './Pracownicy';
 import { autoAssign } from '../domain/autoAssign';
 import type { SheetTarget } from './ReplacementSheet';
 import { t } from '../i18n';
@@ -17,7 +18,7 @@ function deficitWindow(s: StationStatus, start: number): { start: number; end: n
   return { start: start + low[0], end: start + low[low.length - 1] + 1 };
 }
 
-function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveTo }: { e: RosterEntry; at?: string; names?: (id: string) => string; onAbsent: () => void; onUndo: () => void; onHours?: () => void; onUncombine?: () => void; moveTo?: { options: { id: string; label: string }[]; go: (stationId: string | null) => void } }) {
+function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveTo, onOpen }: { e: RosterEntry; at?: string; names?: (id: string) => string; onAbsent: () => void; onUndo: () => void; onHours?: () => void; onUncombine?: () => void; moveTo?: { options: { id: string; label: string }[]; go: (stationId: string | null) => void }; onOpen?: () => void }) {
   const here = at ?? e.stationId;
   const lv = here ? level(e.worker, here) : 0;
   const others = [e.stationId, ...e.also].filter((x): x is string => !!x && x !== here);
@@ -25,7 +26,9 @@ function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveT
   return (
     <div className="person">
       <div className="who">
-        <b style={e.absence ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{e.worker.name}</b>{' '}
+        <button type="button" className="link-btn" title={t('Otwórz kartę pracownika')} onClick={onOpen} style={e.absence ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>
+          {e.worker.name}
+        </button>{' '}
         <TypeTag w={e.worker} />
         <div className="sub">
           {fmtRange(e.shift.start, e.shift.end - e.shift.start)} · {t('bryg.')} {e.worker.brigade}
@@ -91,6 +94,7 @@ export default function Obsada() {
   const [date, setDate] = useState(todayIso());
   const [code, setCode] = useState(() => currentWindowCode(state));
   const [target, setTarget] = useState<SheetTarget | null>(null);
+  const [openWorker, setOpenWorker] = useState<string | null>(null);
 
   const lineCodes = new Set(linePatterns(state, lineId).flatMap((p) => p.sequence.filter((c) => c !== OFF)));
   const lineDefs = state.shiftDefs.filter((d) => lineCodes.has(d.code)).sort((a, b) => a.hours - b.hours || a.start - b.start);
@@ -295,6 +299,7 @@ export default function Obsada() {
                     onAbsent={() => openAbsent(e)}
                     onUndo={() => undoAbsence(e)}
                     onHours={toggleHours(e)}
+                    onOpen={() => setOpenWorker(e.worker.id)}
                     onUncombine={guest ? () => combine(e, s.station.id, false) : undefined}
                     moveTo={guest ? undefined : {
                       options: ls.statuses.filter((o) => o.station.id !== s.station.id).map((o) => ({ id: o.station.id, label: `${o.station.name} (${t('poz.')} ${level(e.worker, o.station.id)})` })),
@@ -334,7 +339,7 @@ export default function Obsada() {
         {ls.reserve.length === 0 && <div className="sub">{t('Brak rezerwy na tej zmianie.')}</div>}
         {ls.reserve.map((e) => (
           <div key={e.worker.id + e.shift.date} className="list-item">
-            <PersonRow e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} onHours={toggleHours(e)} />
+            <PersonRow e={e} onOpen={() => setOpenWorker(e.worker.id)} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} onHours={toggleHours(e)} />
             {!e.absence && (
               <label className="field" style={{ minWidth: 200 }}>
                 {t('Przypisz do')}
@@ -352,6 +357,7 @@ export default function Obsada() {
         ))}
       </section>
 
+      {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}
       {target && <ReplacementSheet target={target} onClose={() => setTarget(null)} />}
     </>
   );

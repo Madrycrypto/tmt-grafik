@@ -5,6 +5,7 @@ import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, useLine } from '../ui';
 import { t } from '../i18n';
+import { WorkerEditor } from './Pracownicy';
 
 export default function Matrix() {
   const { state, update } = useApp();
@@ -12,6 +13,7 @@ export default function Matrix() {
   const [brigade, setBrigade] = useState<string>('all');
   const [others, setOthers] = useState(false);
   const [query, setQuery] = useState('');
+  const [open, setOpen] = useState<string | null>(null);
 
   const stations = useMemo(() => state.stations.filter((s) => s.lineId === lineId).sort((a, b) => a.order - b.order), [state, lineId]);
   const people = useMemo(
@@ -139,7 +141,9 @@ export default function Matrix() {
                 {people.map((w) => (
                   <tr key={w.id}>
                     <td className="sticky-col">
-                      <div style={{ fontWeight: 600 }}>{w.name}</div>
+                      <button type="button" className="link-btn" title={t('Otwórz kartę pracownika')} onClick={() => setOpen(w.id)}>
+                        {w.name}
+                      </button>
                       <TypeTag w={w} /> <span className="sub">{t('bryg.')} {w.brigade} · {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}</span>
                       {w.lineId !== lineId && <span className="tag" style={{ marginLeft: 4 }}>{state.lines.find((l) => l.id === w.lineId)?.name}</span>}
                     </td>
@@ -172,8 +176,9 @@ export default function Matrix() {
             </table>
           </div>
         )}
-        <div className="sub" style={{ marginTop: 8 }}>{t('Niebieskie tło = stanowisko macierzyste pracownika.')}</div>
+        <div className="sub" style={{ marginTop: 8 }}>{t('Niebieskie tło = stanowisko macierzyste pracownika.')} {t('Kliknij nazwisko, aby otworzyć kartę pracownika.')}</div>
       </section>
+      {open && <WorkerEditor workerId={open} onClose={() => setOpen(null)} />}
     </>
   );
 }

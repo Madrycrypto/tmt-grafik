@@ -552,4 +552,6 @@ export const zh: Record<string, string> = {
   'Zmienić stanowisko macierzyste?': '是否更改固定工位？',
   '{n} os. ma stanowisko macierzyste, na którym nie ma kwalifikacji:': '{n} 人的固定工位没有资质：',
   'Ustaw macierzyste wg matrycy': '按技能矩阵设定固定工位',
+  'Otwórz kartę pracownika': '打开员工卡',
+  'Kliknij nazwisko, aby otworzyć kartę pracownika.': '点击姓名可打开员工卡。',
 };

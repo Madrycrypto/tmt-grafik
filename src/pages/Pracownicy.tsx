@@ -307,6 +307,31 @@ function WorkerAbsences({ worker }: { worker: Worker }) {
   );
 }
 
+/** Karta pracownika do otwarcia z innych ekranów (Matrix, Obsada). */
+export function WorkerEditor({ workerId, onClose }: { workerId: string; onClose: () => void }) {
+  const { state, backend } = useApp();
+  const acc = useAccounts();
+  const worker = state.workers.find((w) => w.id === workerId);
+  if (!worker) return null;
+  return (
+    <WorkerForm
+      initial={worker}
+      account={acc.accounts.get(worker.id)}
+      onInvite={
+        acc.enabled && backend.client
+          ? (w) =>
+              void inviteWorkers(backend.client!, [w]).then((r) => {
+                void acc.reload();
+                if (r.invited.length) printCards(state, r.invited);
+              })
+          : undefined
+      }
+      onRevoke={acc.enabled && backend.client ? (w) => void revokeWorker(backend.client!, w.id).then(() => acc.reload()) : undefined}
+      onClose={onClose}
+    />
+  );
+}
+
 export default function Pracownicy() {
   const { state, update } = useApp();
   const [editing, setEditing] = useState<Worker | null>(null);
