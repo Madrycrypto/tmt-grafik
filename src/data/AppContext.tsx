@@ -2,13 +2,15 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { log } from '../domain/actions';
+import { todayIso } from '../domain/dates';
+import { scheduleNotices } from '../domain/notify';
 import type { AppState } from '../domain/types';
 import { applyRemote, cloudBackend, demoBackend, readCloudConfig } from './backend';
 import type { Backend } from './backend';
 import { t } from '../i18n';
 
 type SyncStatus = 'idle' | 'saving' | 'error';
-export type Role = 'admin' | 'editor' | 'viewer';
+export type Role = 'admin' | 'editor' | 'viewer' | 'employee';
 
 interface AppCtx {
   state: AppState;
@@ -55,6 +57,9 @@ export function AppProvider({
   const [loadError, setLoadError] = useState<string | null>(null);
   const [role, setRole] = useState<Role | null | undefined>(backend.mode === 'demo' ? 'admin' : undefined);
   const stateRef = useRef<AppState | null>(null);
+  // powiadomienia zbierane przez chwilę, żeby kilka kliknięć dało jedno powiadomienie
+  const notifyBase = useRef<AppState | null>(null);
+  const notifyTimer = useRef<number | undefined>(undefined);
   const queue = useRef<Promise<void>>(Promise.resolve());
 
   useEffect(() => {
@@ -142,8 +147,22 @@ export function AppProvider({
       stateRef.current = draft;
       setState(draft);
       persist(prev, draft);
+      if (backend.client) {
+        notifyBase.current ??= prev;
+        window.clearTimeout(notifyTimer.current);
+        notifyTimer.current = window.setTimeout(() => {
+          const base = notifyBase.current;
+          const now = stateRef.current;
+          notifyBase.current = null;
+          if (!base || !now) return;
+          const items = scheduleNotices(base, now, todayIso());
+          if (items.length) {
+            void queue.current.then(() => backend.client!.functions.invoke('tmt-api', { body: { action: 'notify', items } }));
+          }
+        }, 10_000);
+      }
     },
-    [persist, user, canEdit],
+    [persist, user, canEdit, backend],
   );
 
   const replaceAll = useCallback(

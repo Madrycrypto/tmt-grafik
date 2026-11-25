@@ -10,7 +10,11 @@ export default defineConfig({
     react(),
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.png', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.png', 'apple-touch-icon.png', 'push-sw.js'],
+      workbox: {
+        importScripts: ['push-sw.js'],
+        navigateFallbackDenylist: [/^\/functions\//],
+      },
       manifest: {
         name: 'TMT Grafik — brygady i obsada',
         short_name: 'TMT Grafik',

@@ -130,13 +130,36 @@ export function LineSelect({ state, value, onChange }: { state: AppState; value:
     <label className="field">
       {t('Linia')}
       <select value={value} onChange={(e) => onChange(e.target.value)}>
-        {state.lines.map((l) => (
+        <LineOptions state={state} />
+      </select>
+    </label>
+  );
+}
+
+/** Opcje linii pogrupowane według linii głównej (np. CFM → Lutowanie, Moduły, Rdzenie). */
+export function LineOptions({ state }: { state: AppState }) {
+  const groups = new Map<string, AppState['lines']>();
+  for (const l of [...state.lines].sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.name.localeCompare(b.name))) {
+    const g = l.group ?? '';
+    groups.set(g, [...(groups.get(g) ?? []), l]);
+  }
+  return (
+    <>
+      {[...groups].map(([g, ls]) => {
+        const opts = ls.map((l) => (
           <option key={l.id} value={l.id}>
             {l.name}
           </option>
-        ))}
-      </select>
-    </label>
+        ));
+        return g ? (
+          <optgroup key={g} label={g}>
+            {opts}
+          </optgroup>
+        ) : (
+          opts
+        );
+      })}
+    </>
   );
 }
 

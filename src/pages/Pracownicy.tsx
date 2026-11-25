@@ -6,9 +6,11 @@ import { BRIGADES, REASON_LABEL, TYPE_LABEL, linePatterns, patternBrigades } fro
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
-import { Icon, Sheet, TypeTag } from '../ui';
+import { Icon, Sheet, TypeTag, LineOptions } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
+import { inviteWorkers, printCards, revokeWorker, useAccounts } from './Invites';
+import type { Account, InviteResult } from './Invites';
 import { t } from '../i18n';
 
 function emptyWorker(lineId: string, patternId: string): Worker {
@@ -19,7 +21,19 @@ function newWorkerFor(state: Parameters<typeof linePatterns>[0], lineId: string)
   return emptyWorker(lineId, linePatterns(state, lineId)[0]?.id ?? state.patterns[0]?.id ?? '');
 }
 
-function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void }) {
+function WorkerForm({
+  initial,
+  onClose,
+  account,
+  onInvite,
+  onRevoke,
+}: {
+  initial: Worker;
+  onClose: () => void;
+  account?: Account;
+  onInvite?: (w: Worker) => void;
+  onRevoke?: (w: Worker) => void;
+}) {
   const { state, update } = useApp();
   const [w, setW] = useState<Worker>(initial);
   const isNew = !state.workers.some((x) => x.id === initial.id);
@@ -31,7 +45,7 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
 
   const save = () => {
     if (!w.name.trim()) return;
-    const clean = { ...w, name: w.name.trim(), agency: w.type === 'AG' ? w.agency : undefined };
+    const clean = { ...w, name: w.name.trim(), agency: w.type === 'AG' ? w.agency : undefined, email: w.email?.trim().toLowerCase() || undefined };
     update((d) => {
       const i = d.workers.findIndex((x) => x.id === w.id);
       if (i >= 0) d.workers[i] = clean;
@@ -113,11 +127,7 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
               setW({ ...w, lineId: e.target.value, homeStationId: null, patternId: pid, brigade: b.includes(w.brigade) ? w.brigade : b[0] });
             }}
           >
-            {state.lines.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
+            <LineOptions state={state} />
           </select>
         </label>
         <label className="field grow">
@@ -132,10 +142,58 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
           </select>
         </label>
       </div>
+      <div className="row">
+        <label className="field grow">
+          {t('Długość zmiany')}
+          <select value={w.shiftHours ?? ''} onChange={(e) => set('shiftHours', e.target.value ? Number(e.target.value) : undefined)}>
+            <option value="">{t('wg systemu zmianowego')}</option>
+            <option value={8}>8 h</option>
+            <option value={12}>12 h</option>
+          </select>
+        </label>
+        <label className="field grow">
+          {t('E-mail (login do aplikacji)')}
+          <input type="email" value={w.email ?? ''} onChange={(e) => set('email', e.target.value)} placeholder="jan.kowalski@gmail.com" />
+        </label>
+      </div>
+      {w.shiftHours && (
+        <div className="sub">{t('12 h w systemie 8 h: zmiana poranna 07–19, popołudniowa 11–23, nocna 19–07. Pojedynczy dzień zmienisz w Obsadzie przyciskiem „→ 12 h”.')}</div>
+      )}
       <label className="sub" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
         <input type="checkbox" checked={w.active} onChange={(e) => set('active', e.target.checked)} />
         {t('aktywny (nieaktywni nie są planowani)')}
       </label>
+      {!isNew && onInvite && (
+        <div className="note stack" style={{ gap: 6 }}>
+          <b>{t('Aplikacja na telefon')}</b>
+          {account ? (
+            account.code ? (
+              <span>
+                {t('Zaproszony')} ({account.email}) · {t('Kod aktywacyjny')}: <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{account.code}</b>
+              </span>
+            ) : (
+              <span>{t('Ma konto w aplikacji')} ({account.email})</span>
+            )
+          ) : (
+            <span>{w.email ? t('Jeszcze nie zaproszony.') : t('Wpisz e-mail i zapisz, potem zaproś.')}</span>
+          )}
+          <div className="row">
+            <button type="button" className="btn small primary" disabled={!initial.email || initial.email !== w.email?.trim().toLowerCase()} onClick={() => onInvite(initial)}>
+              {account ? t('Nowy kod + kartka') : t('Zaproś + kartka')}
+            </button>
+            {account && onRevoke && (
+              <button type="button" className="btn small" onClick={() => confirm(t('Odebrać dostęp {email}?', { email: account.email })) && onRevoke(initial)}>
+                {t('Odbierz dostęp')}
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+      {!isNew && (
+        <a className="btn small" href={`#/podglad/${initial.id}`}>
+          {t('Podgląd aplikacji pracownika')}
+        </a>
+      )}
       {!isNew && <WorkerAbsences worker={w} />}
       <div className="row">
         <button type="button" className="btn primary grow" onClick={save} disabled={!w.name.trim()}>
@@ -237,6 +295,35 @@ export default function Pracownicy() {
   const [brig, setBrig] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [sheet, setSheet] = useState<'import' | 'remove' | 'hr' | null>(null);
+  const { backend } = useApp();
+  const acc = useAccounts();
+  const [inviteInfo, setInviteInfo] = useState<string | null>(null);
+
+  const invite = async (ws: Worker[]) => {
+    if (!backend.client) return;
+    setInviteInfo(null);
+    try {
+      const r: InviteResult = await inviteWorkers(backend.client, ws);
+      await acc.reload();
+      if (r.invited.length) printCards(state, r.invited);
+      setInviteInfo(
+        t('Zaproszono: {n}.', { n: r.invited.length }) +
+          (r.skipped.length ? ' ' + t('Pominięto: {list}', { list: r.skipped.map((s) => `${s.worker.name} (${s.reason})`).join(', ') }) : ''),
+      );
+    } catch (e) {
+      setInviteInfo(e instanceof Error ? e.message : String(e));
+    }
+  };
+
+  const reprint = () => {
+    const rows = state.workers
+      .map((w) => ({ w, a: acc.accounts.get(w.id) }))
+      .filter((x): x is { w: Worker; a: Account } => !!x.a?.code && (!x.a.expires || new Date(x.a.expires) > new Date()))
+      .filter((x) => selected.size === 0 || selected.has(x.w.id))
+      .map((x) => ({ worker: x.w, email: x.a.email, code: x.a.code! }));
+    if (!rows.length) return setInviteInfo(t('Brak ważnych kodów do wydruku. Zaproś pracowników albo wygeneruj nowe kody.'));
+    printCards(state, rows);
+  };
 
   const list = useMemo(
     () =>
@@ -299,6 +386,11 @@ export default function Pracownicy() {
           <button type="button" className="btn" onClick={() => setSheet('hr')}>
             {t('Eksport dla kadr')}
           </button>
+          {acc.enabled && (
+            <button type="button" className="btn" onClick={reprint}>
+              {t('Kartki z kodami')}
+            </button>
+          )}
         </div>
       </div>
 
@@ -312,11 +404,7 @@ export default function Pracownicy() {
             {t('Linia')}
             <select value={line} onChange={(e) => setLine(e.target.value)}>
               <option value="all">{t('wszystkie')}</option>
-              {state.lines.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
+              <LineOptions state={state} />
             </select>
           </label>
           <label className="field">
@@ -341,6 +429,7 @@ export default function Pracownicy() {
           </label>
         </div>
 
+        {inviteInfo && <div className="note" style={{ marginBottom: 8 }}>{inviteInfo}</div>}
         {selected.size > 0 && (
           <div className="note" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8, background: 'var(--accent-soft)' }}>
             <b style={{ color: 'var(--accent)' }}>{t('Zaznaczono')}: {selected.size}</b>
@@ -352,15 +441,16 @@ export default function Pracownicy() {
             </select>
             <select className="input" aria-label={t('Przenieś zaznaczonych na linię')} value="" onChange={(e) => e.target.value && bulkSet({ lineId: e.target.value }, `Przeniesienie na ${state.lines.find((l) => l.id === e.target.value)?.name}`)}>
               <option value="">{t('Linia →')}</option>
-              {state.lines.map((l) => (
-                <option key={l.id} value={l.id}>
-                  {l.name}
-                </option>
-              ))}
+              <LineOptions state={state} />
             </select>
             <button type="button" className="btn small" onClick={() => bulkSet({ active: true }, 'Aktywowano')}>
               {t('Aktywuj')}
             </button>
+            {acc.enabled && (
+              <button type="button" className="btn small primary" onClick={() => void invite(chosen)}>
+                {t('Zaproś do aplikacji')} ({chosen.filter((w) => w.email).length})
+              </button>
+            )}
             <BulkButtons small workers={chosen} update={update} onDone={() => setSelected(new Set())} />
             <button type="button" className="btn small ghost" onClick={() => setSelected(new Set())}>
               {t('Odznacz')}
@@ -386,11 +476,31 @@ export default function Pracownicy() {
                 {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}
               </div>
             </button>
+            {acc.push.has(w.id) && (
+              <span className="tag green" title={t('Powiadomienia włączone ✓')}>
+                📱
+              </span>
+            )}
+            {acc.enabled && w.email && !acc.accounts.has(w.id) && <span className="tag">{t('bez konta')}</span>}
+            {acc.accounts.get(w.id)?.code && <span className="tag amber">{t('kod')}: {acc.accounts.get(w.id)!.code}</span>}
+            {acc.accounts.has(w.id) && !acc.accounts.get(w.id)!.code && <span className="tag blue">{t('aplikacja')}</span>}
             <span className="tag">{t('Bryg.')} {w.brigade}</span>
           </div>
         ))}
       </section>
-      {editing && <WorkerForm initial={editing} onClose={() => setEditing(null)} />}
+      {editing && (
+        <WorkerForm
+          initial={editing}
+          account={acc.accounts.get(editing.id)}
+          onInvite={acc.enabled ? (w) => void invite([w]) : undefined}
+          onRevoke={
+            acc.enabled && backend.client
+              ? (w) => void revokeWorker(backend.client!, w.id).then(() => acc.reload())
+              : undefined
+          }
+          onClose={() => setEditing(null)}
+        />
+      )}
       {sheet === 'import' && <ImportSheet onClose={() => setSheet(null)} />}
       {sheet === 'remove' && <RemoveListSheet onClose={() => setSheet(null)} />}
       {sheet === 'hr' && <HrExportSheet onClose={() => setSheet(null)} />}

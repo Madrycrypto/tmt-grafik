@@ -27,6 +27,13 @@ export function setLang(l: Lang): void {
   location.reload();
 }
 
+/** Tłumaczenie w podanym języku (np. treść powiadomienia dla pracownika z innym językiem). */
+export function tl(l: Lang, text: string, vars?: Record<string, string | number>): string {
+  let out = l === 'zh' && zh[text] !== undefined ? zh[text] : text.split('#')[0];
+  if (vars) for (const [k, v] of Object.entries(vars)) out = out.split(`{${k}}`).join(String(v));
+  return out;
+}
+
 /** Tłumaczenie po polskim tekście źródłowym; {nazwa} w tekście podmieniane z vars. */
 export function t(text: string, vars?: Record<string, string | number>): string {
   // „tekst#kontekst” rozróżnia to samo polskie słowo w różnych miejscach

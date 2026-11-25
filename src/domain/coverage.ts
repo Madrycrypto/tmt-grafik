@@ -33,13 +33,26 @@ export function plannedShift(state: AppState, w: Worker, date: string): WorkerSh
   if (cell.status !== 'work') return null;
   const def = shiftDef(state, cell.code);
   if (!def) return null;
-  return { date, start: def.start, end: def.start + def.hours, code: def.code, extra: false };
+  if (asg?.shift) return { date, start: asg.shift.start, end: asg.shift.start + asg.shift.hours, code: def.code, extra: false };
+  const [start, end] = stretch(def.start, def.hours, w.shiftHours);
+  return { date, start, end, code: def.code, extra: false };
+}
+
+/**
+ * Zmiana o innej długości niż w systemie linii: zmiana zaczynająca się przed południem
+ * zachowuje początek (07–15 → 07–19), późniejsza zachowuje koniec (15–23 → 11–23, 23–07 → 19–07).
+ */
+export function stretch(start: number, hours: number, target?: number): [number, number] {
+  if (!target || target === hours) return [start, start + hours];
+  if (start < 12) return [start, start + target];
+  const end = start + hours;
+  return [end - target, end];
 }
 
 /** Linia i stanowisko pracownika na zmianę zaczynającą się danego dnia. */
 export function placement(state: AppState, w: Worker, date: string): { lineId: string; stationId: string | null; moved: boolean } {
   const asg = assignmentOn(state, w.id, date);
-  if (asg) return { lineId: asg.lineId, stationId: asg.stationId, moved: true };
+  if (asg) return { lineId: asg.lineId, stationId: asg.stationId, moved: asg.lineId !== w.lineId || asg.stationId !== w.homeStationId };
   return { lineId: w.lineId, stationId: w.homeStationId, moved: false };
 }
 

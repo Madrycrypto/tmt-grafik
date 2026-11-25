@@ -1,17 +1,17 @@
 import { useMemo, useState } from 'react';
 import { monthDays, todayIso, weekday, WEEKDAY_SHORT } from '../domain/dates';
-import { hrDailyCsv, hrMonthlyCsv, hrSummary } from '../domain/hrExport';
+import { hrDailyCsv, hrMonthlyCsv, hrStationsCsv, hrSummary } from '../domain/hrExport';
 import type { HrFilter } from '../domain/hrExport';
 import { TYPE_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
-import { Sheet } from '../ui';
+import { Sheet, LineOptions } from '../ui';
 import { downloadCsv } from './WorkerBulk';
 import { t } from '../i18n';
 
 export default function HrExportSheet({ onClose, month: initialMonth }: { onClose: () => void; month?: string }) {
   const { state } = useApp();
   const [f, setF] = useState<HrFilter>({ month: initialMonth ?? todayIso().slice(0, 7), lineId: 'all', who: 'all', includeInactive: false });
-  const [format, setFormat] = useState<'monthly' | 'daily'>('monthly');
+  const [format, setFormat] = useState<'monthly' | 'daily' | 'stations'>('monthly');
   const summary = useMemo(() => hrSummary(state, f), [state, f]);
   const agencies = [...new Set(state.workers.filter((w) => w.type === 'AG' && w.agency).map((w) => w.agency!))].sort();
   const days = monthDays(f.month);
@@ -20,8 +20,8 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
   const download = () => {
     const line = f.lineId === 'all' ? 'wszystkie-linie' : (state.lines.find((l) => l.id === f.lineId)?.name ?? '').replace(/\s+/g, '-');
     const who = f.who === 'all' ? '' : `-${f.who.replace(/^ag:/, '').replace(/\s+/g, '-')}`;
-    const name = `kadry-${format === 'monthly' ? 'grafik' : 'lista-dzienna'}-${f.month}-${line}${who}.csv`;
-    downloadCsv(name, format === 'monthly' ? hrMonthlyCsv(state, f) : hrDailyCsv(state, f));
+    const name = `kadry-${format === 'monthly' ? 'grafik' : format === 'daily' ? 'lista-dzienna' : 'stanowiska-premie'}-${f.month}-${line}${who}.csv`;
+    downloadCsv(name, format === 'monthly' ? hrMonthlyCsv(state, f) : format === 'daily' ? hrDailyCsv(state, f) : hrStationsCsv(state, f));
   };
 
   return (
@@ -35,11 +35,7 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
           {t('Linia')}
           <select value={f.lineId} onChange={(e) => setF({ ...f, lineId: e.target.value })}>
             <option value="all">{t('wszystkie')}</option>
-            {state.lines.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
+            <LineOptions state={state} />
           </select>
         </label>
         <label className="field">
@@ -67,6 +63,10 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
         <label className="tag" style={{ padding: '8px 12px', fontSize: 13, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <input type="radio" checked={format === 'daily'} onChange={() => setFormat('daily')} />
           {t('Lista dzienna (wiersz na dzień)')}
+        </label>
+        <label className="tag" style={{ padding: '8px 12px', fontSize: 13, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+          <input type="radio" checked={format === 'stations'} onChange={() => setFormat('stations')} />
+          {t('Godziny na stanowiskach (premie)')}
         </label>
       </div>
       <label className="sub" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>

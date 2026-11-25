@@ -1,4 +1,5 @@
 import type { Variant } from './replacement';
+import { stretch } from './coverage';
 import type { AbsenceReason, AppState, Assignment, Worker } from './types';
 
 export function uid(prefix = ''): string {
@@ -11,8 +12,32 @@ export function log(state: AppState, user: string, text: string): void {
 }
 
 export function setAssignment(state: AppState, a: Omit<Assignment, 'id'>): void {
-  state.assignments = state.assignments.filter((x) => !(x.workerId === a.workerId && x.date === a.date));
-  state.assignments.push({ ...a, id: uid('as') });
+  const old = state.assignments.find((x) => x.workerId === a.workerId && x.date === a.date);
+  state.assignments = state.assignments.filter((x) => x !== old);
+  // przesunięcie na inne stanowisko nie kasuje zmienionych godzin tego dnia
+  const shift = a.shift ?? (a.extraShift ? undefined : old?.shift);
+  state.assignments.push({ ...a, ...(shift ? { shift } : {}), id: uid('as') });
+}
+
+/** Ten dzień z inną długością zmiany (np. 12 h zamiast 8 h); null przywraca godziny z grafiku. */
+export function setDayHours(state: AppState, w: Worker, date: string, hours: number | null, base: { start: number; hours: number }, place: { lineId: string; stationId: string | null }): void {
+  const old = state.assignments.find((x) => x.workerId === w.id && x.date === date);
+  state.assignments = state.assignments.filter((x) => x !== old);
+  const moved = old && (old.stationId !== w.homeStationId || old.lineId !== w.lineId);
+  if (hours === null) {
+    if (moved) state.assignments.push({ ...old!, shift: undefined, id: uid('as') });
+    return;
+  }
+  const [start, end] = stretch(base.start, base.hours, hours);
+  state.assignments.push({
+    id: uid('as'),
+    date,
+    workerId: w.id,
+    lineId: place.lineId,
+    stationId: place.stationId,
+    shift: { start, hours: end - start },
+    source: old?.source ?? 'manual',
+  });
 }
 
 export function addAbsence(state: AppState, workerId: string, date: string, reason: AbsenceReason, to = date): void {

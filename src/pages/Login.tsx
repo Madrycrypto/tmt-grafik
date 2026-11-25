@@ -10,7 +10,8 @@ type Mode = 'login' | 'signup' | 'reset';
 function translate(msg: string): string {
   if (msg === 'Invalid login credentials') return t('Nieprawidłowy e-mail lub hasło.');
   if (msg === 'Email not confirmed') return t('Najpierw potwierdź e-mail — kliknij link w wiadomości od Supabase.');
-  if (/Database error saving new user|nie jest na liście/i.test(msg)) return t('Ten e-mail nie jest na liście dostępu. Poproś administratora o dodanie.');
+  if (/Database error saving new user|nie jest na liście|kod aktywacyjny/i.test(msg)) return t('E-mail nie jest na liście albo kod aktywacyjny jest nieprawidłowy lub wygasł. Poproś przełożonego o nowy kod.');
+  if (/sending confirmation|not authorized/i.test(msg)) return t('Serwer próbuje wysłać e-mail potwierdzający. Administrator musi wyłączyć „Confirm email” w Supabase (Authentication → Sign In / Providers → Email).');
   if (/User already registered/i.test(msg)) return t('Konto już istnieje — zaloguj się albo użyj „Nie pamiętam hasła”.');
   if (/Password should be at least/i.test(msg)) return t('Hasło musi mieć co najmniej 6 znaków.');
   if (/rate limit/i.test(msg)) return t('Zbyt wiele wiadomości e-mail w krótkim czasie. Spróbuj za godzinę albo poproś administratora.');
@@ -33,8 +34,10 @@ function Frame({ title, sub, children }: { title: string; sub: string; children:
 }
 
 export default function Login({ backend }: { backend: Backend }) {
-  const [mode, setMode] = useState<Mode>('login');
-  const [email, setEmail] = useState('');
+  const params = new URLSearchParams(location.search);
+  const [mode, setMode] = useState<Mode>(params.get('kod') ? 'signup' : 'login');
+  const [email, setEmail] = useState(params.get('e') ?? '');
+  const [code, setCode] = useState(params.get('kod') ?? '');
   const [password, setPassword] = useState('');
   const [password2, setPassword2] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -53,20 +56,33 @@ export default function Login({ backend }: { backend: Backend }) {
     if (!auth) return;
     setError(null);
     setInfo(null);
-    if (mode === 'signup' && password !== password2) return setError(t('Hasła nie są takie same.'));
+    if (mode !== 'login' && password !== password2) return setError(t('Hasła nie są takie same.'));
     setBusy(true);
     try {
       if (mode === 'login') {
         const { error: err } = await auth.signInWithPassword({ email: email.trim(), password });
         if (err) setError(translate(err.message));
       } else if (mode === 'signup') {
-        const { data, error: err } = await auth.signUp({ email: email.trim(), password, options: { emailRedirectTo: appUrl() } });
+        const { data, error: err } = await auth.signUp({
+          email: email.trim().toLowerCase(),
+          password,
+          options: { emailRedirectTo: appUrl(), data: { invite_code: code.trim().toUpperCase() } },
+        });
         if (err) setError(translate(err.message));
-        else if (!data.session) setInfo(t('Konto utworzone. Sprawdź skrzynkę e-mail i kliknij link potwierdzający, potem zaloguj się.'));
+        else if (!data.session) setInfo(t('Konto utworzone. Zaloguj się.'));
+        else history.replaceState(null, '', location.pathname + location.hash);
       } else {
-        const { error: err } = await auth.resetPasswordForEmail(email.trim(), { redirectTo: appUrl() });
-        if (err) setError(translate(err.message));
-        else setInfo(t('Jeśli konto istnieje, wysłaliśmy link do ustawienia nowego hasła. Otwórz go w tej samej przeglądarce.'));
+        const { data, error: err } = await backend.client!.functions.invoke('tmt-api', {
+          body: { action: 'reset', email: email.trim().toLowerCase(), code: code.trim().toUpperCase(), password },
+        });
+        if (err || !data?.ok) {
+          const ctx = (err as { context?: Response } | null)?.context;
+          const body = ctx ? await ctx.json().catch(() => ({})) : {};
+          setError(body.error === 'no_account' ? t('Konto jeszcze nie istnieje — użyj „Pierwsze logowanie”.') : t('Nieprawidłowy lub wygasły kod. Poproś przełożonego o nowy kod.'));
+        } else {
+          const { error: e2 } = await auth.signInWithPassword({ email: email.trim().toLowerCase(), password });
+          if (e2) setError(translate(e2.message));
+        }
       }
     } finally {
       setBusy(false);
@@ -75,8 +91,8 @@ export default function Login({ backend }: { backend: Backend }) {
 
   const titles: Record<Mode, [string, string, string]> = {
     login: ['TMT Grafik', t('Zaloguj się, aby zobaczyć grafik i obsadę.'), t('Zaloguj')],
-    signup: [t('Pierwsze logowanie'), t('Dla osób dodanych przez administratora. Ustaw swoje hasło.'), t('Utwórz konto')],
-    reset: [t('Nie pamiętam hasła'), t('Wyślemy link do ustawienia nowego hasła.'), t('Wyślij link')],
+    signup: [t('Pierwsze logowanie'), t('Wpisz e-mail i kod aktywacyjny od przełożonego, potem ustaw hasło.'), t('Utwórz konto')],
+    reset: [t('Nie pamiętam hasła'), t('Poproś przełożonego o nowy kod i ustaw nowe hasło.'), t('Ustaw hasło')],
   };
   const [title, sub, cta] = titles[mode];
 
@@ -87,12 +103,26 @@ export default function Login({ backend }: { backend: Backend }) {
           {t('E-mail')}
           <input type="email" autoComplete="username" required value={email} onChange={(e) => setEmail(e.target.value)} />
         </label>
-        {mode !== 'reset' && (
+        {mode !== 'login' && (
           <label className="field">
-            {mode === 'signup' ? t('Nowe hasło (min. 6 znaków)') : t('Hasło')}
+            {t('Kod aktywacyjny')}
+            <input
+              required
+              autoComplete="one-time-code"
+              autoCapitalize="characters"
+              maxLength={6}
+              value={code}
+              onChange={(e) => setCode(e.target.value.toUpperCase())}
+              style={{ fontFamily: 'monospace', letterSpacing: 4, fontSize: 18 }}
+            />
+          </label>
+        )}
+        {(
+          <label className="field">
+            {mode !== 'login' ? t('Nowe hasło (min. 6 znaków)') : t('Hasło')}
             <input
               type="password"
-              autoComplete={mode === 'signup' ? 'new-password' : 'current-password'}
+              autoComplete={mode !== 'login' ? 'new-password' : 'current-password'}
               required
               minLength={6}
               value={password}
@@ -100,7 +130,7 @@ export default function Login({ backend }: { backend: Backend }) {
             />
           </label>
         )}
-        {mode === 'signup' && (
+        {mode !== 'login' && (
           <label className="field">
             {t('Powtórz hasło')}
             <input type="password" autoComplete="new-password" required value={password2} onChange={(e) => setPassword2(e.target.value)} />

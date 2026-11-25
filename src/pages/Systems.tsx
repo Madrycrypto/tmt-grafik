@@ -5,6 +5,7 @@ import type { SystemKind } from '../domain/templates';
 import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { t } from '../i18n';
+import { LineOptions } from '../ui';
 
 /** Dodawanie systemów 1/2/3/4-zmianowych (8 h lub 12 h) i przypisanie ich do linii. */
 export default function Systems() {
@@ -113,11 +114,7 @@ export default function Systems() {
           {t('Przypisz do linii')}
           <select value={lineId} onChange={(e) => setLineId(e.target.value)}>
             <option value="">{t('— później —')}</option>
-            {state.lines.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
+            <LineOptions state={state} />
           </select>
         </label>
       </div>

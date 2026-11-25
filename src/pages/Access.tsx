@@ -3,13 +3,21 @@ import { useApp } from '../data/AppContext';
 import type { Role } from '../data/AppContext';
 import { appUrl } from '../data/backend';
 import { t } from '../i18n';
+import { inviteCode } from '../domain/notify';
+
+type StaffRole = Exclude<Role, 'employee'>;
 
 interface Allowed {
   email: string;
-  role: Role;
+  role: StaffRole;
+  invite_code: string | null;
 }
 
-const ROLE_INFO: Record<Role, string> = {
+export function codeExpiry(): string {
+  return new Date(Date.now() + 14 * 86_400_000).toISOString();
+}
+
+const ROLE_INFO: Record<StaffRole, string> = {
   admin: t('admin — wszystko + zarządzanie dostępem'),
   editor: t('edytor — zmienia grafik, obsadę, matrycę'),
   viewer: t('podgląd — tylko ogląda'),
@@ -20,14 +28,14 @@ export default function Access() {
   const { backend, role, user } = useApp();
   const [list, setList] = useState<Allowed[]>([]);
   const [email, setEmail] = useState('');
-  const [newRole, setNewRole] = useState<Role>('editor');
+  const [newRole, setNewRole] = useState<StaffRole>('editor');
   const [error, setError] = useState<string | null>(null);
   const [info, setInfo] = useState<string | null>(null);
   const db = backend.client;
 
   const load = useCallback(async () => {
     if (!db) return;
-    const { data, error: err } = await db.from('allowed_users').select('email,role').order('email');
+    const { data, error: err } = await db.from('allowed_users').select('email,role,invite_code').neq('role', 'employee').order('email');
     if (err) setError(err.message);
     else setList(data as Allowed[]);
   }, [db]);
@@ -52,9 +60,10 @@ export default function Access() {
   const add = () => {
     const e = email.trim().toLowerCase();
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return setError(t('Podaj poprawny adres e-mail.'));
+    const code = inviteCode();
     void run(
-      db.from('allowed_users').insert({ email: e, role: newRole }),
-      t('Dodano {email}. Przekaż tej osobie adres {url} — przy pierwszym wejściu wybiera „Pierwsze logowanie” i ustawia hasło.', { email: e, url: appUrl() }),
+      db.from('allowed_users').insert({ email: e, role: newRole, invite_code: code, code_expires: codeExpiry() }),
+      t('Dodano {email}. Kod aktywacyjny: {code}. Przekaż tej osobie adres {url} i kod — przy pierwszym wejściu wybiera „Pierwsze logowanie”.', { email: e, url: appUrl(), code }),
     );
     setEmail('');
   };
@@ -72,8 +81,8 @@ export default function Access() {
         </label>
         <label className="field">
           {t('Rola')}
-          <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}>
-            {(Object.keys(ROLE_INFO) as Role[]).map((r) => (
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value as StaffRole)}>
+            {(Object.keys(ROLE_INFO) as StaffRole[]).map((r) => (
               <option key={r} value={r}>
                 {ROLE_INFO[r]}
               </option>
@@ -92,7 +101,25 @@ export default function Access() {
           <div key={a.email} className="list-item">
             <span className="grow">
               <b>{a.email}</b> {me && <span className="tag blue">{t('Ty')}</span>}
+              {a.invite_code && (
+                <div className="sub">
+                  {t('Kod aktywacyjny')}: <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{a.invite_code}</b>
+                </div>
+              )}
             </span>
+            {!me && (
+              <button
+                type="button"
+                className="btn small"
+                title={t('Nowy kod do pierwszego logowania albo zmiany hasła')}
+                onClick={() => {
+                  const code = inviteCode();
+                  void run(db.from('allowed_users').update({ invite_code: code, code_expires: codeExpiry() }).eq('email', a.email), t('Nowy kod dla {email}: {code}', { email: a.email, code }));
+                }}
+              >
+                {t('Nowy kod')}
+              </button>
+            )}
             <select
               className="input"
               aria-label={`Rola ${a.email}`}
@@ -100,7 +127,7 @@ export default function Access() {
               disabled={me}
               onChange={(e) => void run(db.from('allowed_users').update({ role: e.target.value }).eq('email', a.email), t('Zmieniono rolę {email}.', { email: a.email }))}
             >
-              {(Object.keys(ROLE_INFO) as Role[]).map((r) => (
+              {(Object.keys(ROLE_INFO) as StaffRole[]).map((r) => (
                 <option key={r} value={r}>
                   {r}
                 </option>

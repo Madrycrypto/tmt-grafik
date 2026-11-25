@@ -79,6 +79,8 @@ export interface HrSummary {
   sunday: number;
   extraHours: number;
   absences: Record<string, number>;
+  /** godziny przepracowane na każdym stanowisku (id → h), null = rezerwa */
+  byStation: Record<string, number>;
 }
 
 export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
@@ -86,7 +88,14 @@ export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
   return hrWorkers(state, f).map((worker) => {
     const days = dates.map((d) => dayEntry(state, worker, d));
     const absences: Record<string, number> = {};
-    for (const d of days) if (d.absence) absences[d.absence] = (absences[d.absence] ?? 0) + 1;
+    const byStation: Record<string, number> = {};
+    for (const d of days) {
+      if (d.absence) absences[d.absence] = (absences[d.absence] ?? 0) + 1;
+      if (d.hours > 0) {
+        const k = d.stationId ?? '';
+        byStation[k] = (byStation[k] ?? 0) + d.hours;
+      }
+    }
     const sum = (k: 'hours' | 'night' | 'sunday') => days.reduce((s, d) => s + d[k], 0);
     return {
       worker,
@@ -97,6 +106,7 @@ export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
       sunday: sum('sunday'),
       extraHours: days.filter((d) => d.extra).reduce((s, d) => s + d.hours, 0),
       absences,
+      byStation,
     };
   });
 }
@@ -183,5 +193,32 @@ export function hrDailyCsv(state: AppState, f: HrFilter): string {
     }
   }
   rows.sort((a, b) => String(a[0]).localeCompare(String(b[0])) || String(a[2]).localeCompare(String(b[2]), 'pl'));
+  return csv([head, ...rows]);
+}
+
+/** Godziny na stanowiskach (do premii): wiersz = pracownik × stanowisko, na którym pracował w miesiącu. */
+export function hrStationsCsv(state: AppState, f: HrFilter): string {
+  const head = ['Nazwisko i imię', 'Typ', 'Agencja', 'Linia (macierzysta)', 'Brygada', 'Stanowisko macierzyste', 'Stanowisko', 'Linia stanowiska', 'Godziny', 'Udział %', 'Godziny razem'];
+  const rows: (string | number)[][] = [];
+  for (const s of hrSummary(state, f)) {
+    const home = state.stations.find((x) => x.id === s.worker.homeStationId)?.name ?? 'rezerwa';
+    const entries = Object.entries(s.byStation).sort((a, b) => b[1] - a[1]);
+    for (const [stId, h] of entries) {
+      const st = state.stations.find((x) => x.id === stId);
+      rows.push([
+        s.worker.name,
+        TYPE_LABEL[s.worker.type],
+        s.worker.agency ?? '',
+        lineOf(state, s.worker),
+        s.worker.brigade,
+        home,
+        st?.name ?? 'rezerwa',
+        st ? (state.lines.find((l) => l.id === st.lineId)?.name ?? '') : '',
+        h,
+        s.hours ? Math.round((h / s.hours) * 1000) / 10 : 0,
+        s.hours,
+      ]);
+    }
+  }
   return csv([head, ...rows]);
 }

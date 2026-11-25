@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { setAssignment, stationName } from '../domain/actions';
+import { setAssignment, setDayHours, stationName } from '../domain/actions';
 import { lineStatus, level } from '../domain/coverage';
+import { shiftDef } from '../domain/rota';
 import type { RosterEntry, StationStatus } from '../domain/coverage';
 import { addDays, fmtDate, fmtHour, fmtRange, todayIso } from '../domain/dates';
 import { OFF, REASON_LABEL, linePatterns } from '../domain/types';
@@ -15,8 +16,9 @@ function deficitWindow(s: StationStatus, start: number): { start: number; end: n
   return { start: start + low[0], end: start + low[low.length - 1] + 1 };
 }
 
-function PersonRow({ e, onAbsent, onUndo }: { e: RosterEntry; onAbsent: () => void; onUndo: () => void }) {
+function PersonRow({ e, onAbsent, onUndo, onHours }: { e: RosterEntry; onAbsent: () => void; onUndo: () => void; onHours?: () => void }) {
   const lv = e.stationId ? level(e.worker, e.stationId) : 0;
+  const len = e.shift.end - e.shift.start;
   return (
     <div className="person">
       <div className="who">
@@ -39,9 +41,16 @@ function PersonRow({ e, onAbsent, onUndo }: { e: RosterEntry; onAbsent: () => vo
           )}
         </>
       ) : (
-        <button type="button" className="btn small" onClick={onAbsent}>
-          {t('Brak')}
-        </button>
+        <>
+          {onHours && (
+            <button type="button" className="btn small" title={t('Zmień długość zmiany tego dnia (8 h / 12 h)')} onClick={onHours}>
+              {len === 12 ? '→ 8 h' : '→ 12 h'}
+            </button>
+          )}
+          <button type="button" className="btn small" onClick={onAbsent}>
+            {t('Brak')}
+          </button>
+        </>
       )}
     </div>
   );
@@ -85,6 +94,20 @@ export default function Obsada() {
     update((d) => {
       d.absences = d.absences.filter((a) => a.id !== ab.id);
     }, `Cofnięto brak: ${e.worker.name} (${ab.from})`);
+  };
+
+  const toggleHours = (e: RosterEntry) => {
+    if (e.shift.extra || !e.shift.code) return undefined;
+    const d = shiftDef(state, e.shift.code);
+    if (!d) return undefined;
+    const len = e.shift.end - e.shift.start;
+    const target = len === 12 ? 8 : 12;
+    const back = target === (e.worker.shiftHours ?? d.hours);
+    return () =>
+      update(
+        (s) => setDayHours(s, s.workers.find((w) => w.id === e.worker.id)!, e.shift.date, back ? null : target, { start: d.start, hours: d.hours }, { lineId: e.lineId, stationId: e.stationId }),
+        `${e.worker.name}: ${e.shift.date} ${target} h`,
+      );
   };
 
   const fillGap = (s: StationStatus) => setTarget({ date, lineId, stationId: s.station.id, window: deficitWindow(s, window.start) });
@@ -196,7 +219,7 @@ export default function Obsada() {
               {hourCells(s)}
               {s.people.length === 0 && <div className="sub">{t('Nikt nie jest zaplanowany.')}</div>}
               {s.people.map((e) => (
-                <PersonRow key={e.worker.id + e.shift.date} e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} />
+                <PersonRow key={e.worker.id + e.shift.date} e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} onHours={toggleHours(e)} />
               ))}
               {!s.ok && (
                 <button type="button" className="btn danger" onClick={() => fillGap(s)}>
@@ -216,7 +239,7 @@ export default function Obsada() {
         {ls.reserve.length === 0 && <div className="sub">{t('Brak rezerwy na tej zmianie.')}</div>}
         {ls.reserve.map((e) => (
           <div key={e.worker.id + e.shift.date} className="list-item">
-            <PersonRow e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} />
+            <PersonRow e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} onHours={toggleHours(e)} />
             {!e.absence && (
               <label className="field" style={{ minWidth: 200 }}>
                 {t('Przypisz do')}

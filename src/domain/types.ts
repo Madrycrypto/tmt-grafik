@@ -43,6 +43,8 @@ export interface Exclusion {
 export interface Line {
   id: string;
   name: string;
+  /** linia główna, np. „CFM” dla podlinii Lutowanie / Moduły / Rdzenie */
+  group?: string;
   /** systemy zmianowe (wzorce) używane na linii; brak = wszystkie */
   patternIds?: string[];
 }
@@ -74,6 +76,10 @@ export interface Worker {
   homeStationId: string | null;
   active: boolean;
   skills: Record<string, SkillEntry>;
+  /** login do aplikacji pracownika */
+  email?: string;
+  /** długość zmiany pracownika, gdy inna niż w systemie linii (np. 12 h w systemie 8 h) */
+  shiftHours?: number;
 }
 
 export type AbsenceReason = 'L4' | 'UW' | 'NN' | 'INNE';
@@ -97,6 +103,8 @@ export interface Assignment {
   stationId: string | null;
   /** ustawione dla dodatkowej zmiany (pracownik normalnie ma wolne) */
   extraShift?: { start: number; hours: number };
+  /** zmiana w grafiku na ten dzień z innymi godzinami (np. 12 h zamiast 8 h) — nie jest dodatkową zmianą */
+  shift?: { start: number; hours: number };
   source: 'manual' | 'replacement';
 }
 

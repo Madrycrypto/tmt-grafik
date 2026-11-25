@@ -61,6 +61,8 @@ const HEADERS: Record<string, string[]> = {
   line: ['linia', '产线', '线体'],
   station: ['stanowisko', 'stanowisko macierzyste', '工位'],
   active: ['aktywny', 'status', '在职', '状态'],
+  email: ['e-mail', 'email', 'mail', 'adres e-mail', '邮箱'],
+  hours: ['dlugosc zmiany', 'godziny zmiany', 'zmiana h', '班次时长'],
 };
 
 export interface ImportItem {
@@ -196,6 +198,11 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
     }
 
     const active = parseActive(get(r, 'active')) ?? existing?.active ?? true;
+    const emailRaw = get(r, 'email').toLowerCase();
+    const email = col.email === undefined ? existing?.email : /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailRaw) ? emailRaw : undefined;
+    if (emailRaw && !email) item.warnings.push(t('niepoprawny e-mail „{raw}”', { raw: emailRaw }));
+    const hRaw = Number(get(r, 'hours').replace(/[^0-9]/g, ''));
+    const shiftHours = col.hours === undefined ? existing?.shiftHours : hRaw === 8 || hRaw === 12 ? hRaw : undefined;
     item.worker = {
       id: existing?.id ?? uid('w'),
       name,
@@ -207,6 +214,8 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
       homeStationId,
       active,
       skills,
+      ...(email ? { email } : {}),
+      ...(shiftHours ? { shiftHours } : {}),
     };
     item.action = existing ? 'update' : 'new';
     return item;
@@ -259,7 +268,7 @@ function csvCell(v: string | number): string {
 export function workersCsv(state: AppState, workers: Worker[]): string {
   const stationNames = [...new Set([...state.stations].sort((a, b) => a.order - b.order).map((s) => s.name))];
   const systemOf = (w: Worker) => state.patterns.find((x) => x.id === w.patternId)?.name ?? '';
-  const head = ['Imię i nazwisko', 'Typ', 'Agencja', 'System', 'Brygada', 'Linia', 'Stanowisko', 'Aktywny', ...stationNames];
+  const head = ['Imię i nazwisko', 'Typ', 'Agencja', 'System', 'Brygada', 'Linia', 'Stanowisko', 'Aktywny', 'E-mail', 'Długość zmiany', ...stationNames];
   const lines = workers.map((w) => {
     const lineStations = state.stations.filter((s) => s.lineId === w.lineId);
     return [
@@ -271,6 +280,8 @@ export function workersCsv(state: AppState, workers: Worker[]): string {
       state.lines.find((l) => l.id === w.lineId)?.name ?? '',
       state.stations.find((s) => s.id === w.homeStationId)?.name ?? 'rezerwa',
       w.active ? 'tak' : 'nie',
+      w.email ?? '',
+      w.shiftHours ? `${w.shiftHours}h` : '',
       ...stationNames.map((n) => {
         const st = lineStations.find((s) => s.name === n);
         return st ? (w.skills[st.id]?.level ?? 0) : '';

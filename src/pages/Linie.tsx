@@ -36,9 +36,14 @@ export default function Linie() {
         </div>
       </div>
       {state.lines.length === 0 && <div className="card empty">{t('Brak linii. Dodaj pierwszą powyżej.')}</div>}
-      {state.lines.map((l) => (
-        <LineCard key={l.id} lineId={l.id} />
-      ))}
+      {[...state.lines]
+        .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.name.localeCompare(b.name))
+        .map((l, i, arr) => (
+          <div key={l.id} className="stack">
+            {l.group && l.group !== arr[i - 1]?.group && <h2 style={{ marginTop: 8 }}>{l.group}</h2>}
+            <LineCard lineId={l.id} />
+          </div>
+        ))}
     </>
   );
 }
@@ -131,6 +136,20 @@ function LineCard({ lineId }: { lineId: string }) {
                 d.lines.find((x) => x.id === lineId)!.name = e.target.value.trim();
               }, `Zmiana nazwy linii: ${line.name} → ${e.target.value.trim()}`)
             }
+          />
+          <input
+            className="input"
+            style={{ width: 140 }}
+            aria-label={t('Linia główna')}
+            placeholder={t('Linia główna')}
+            defaultValue={line.group ?? ''}
+            onBlur={(e) => {
+              const g = e.target.value.trim();
+              if (g === (line.group ?? '')) return;
+              update((d) => {
+                d.lines.find((x) => x.id === lineId)!.group = g || undefined;
+              }, `${line.name}: ${t('Linia główna')} → ${g || '—'}`);
+            }}
           />
           <span className="sub">{t('{n} pracowników', { n: crew })}</span>
         </div>

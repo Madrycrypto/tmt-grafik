@@ -1,7 +1,8 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { HashRouter, Route, Routes } from 'react-router-dom';
-import { AppProvider } from './data/AppContext';
+import { HashRouter, Route, Routes, useParams } from 'react-router-dom';
+import { AppProvider, useApp } from './data/AppContext';
+import EmployeeApp from './pages/EmployeeApp';
 import Layout, { More } from './Layout';
 import Grafik from './pages/Grafik';
 import Historia from './pages/Historia';
@@ -16,8 +17,18 @@ import './index.css';
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <AppProvider login={(b) => <Login backend={b} />} recovery={(b, done) => <SetPassword backend={b} onDone={done} />}>
+      <Root />
+    </AppProvider>
+  </StrictMode>,
+);
+
+function Root() {
+  const { role } = useApp();
+  if (role === 'employee') return <EmployeeApp />;
+  return (
       <HashRouter>
         <Routes>
+          <Route path="podglad/:id" element={<Preview />} />
           <Route element={<Layout />}>
             <Route index element={<Obsada />} />
             <Route path="grafik" element={<Grafik />} />
@@ -31,6 +42,10 @@ createRoot(document.getElementById('root')!).render(
           </Route>
         </Routes>
       </HashRouter>
-    </AppProvider>
-  </StrictMode>,
-);
+  );
+}
+
+function Preview() {
+  const { id } = useParams();
+  return <EmployeeApp previewId={id} />;
+}
