@@ -60,6 +60,16 @@ Bez skonfigurowanej bazy aplikacja działa w **trybie demo** na danych przykład
 - **Stanowiska macierzyste wg matrycy** — w Matrycy pasek ostrzega, gdy ktoś ma macierzyste stanowisko bez kwalifikacji, i proponuje poprawkę.
 - **Karta pracownika** — kliknięcie nazwiska w Matrycy lub Obsadzie.
 
+## RCP — kiosk QR (odbicia telefonem)
+
+1. **Tablet przy wejściu**: otwórz `…/tmt-grafik/#/kiosk` (np. ze strony RCP → „Otwórz kiosk”). Najlepiej na osobnym koncie z rolą **kiosk** (Ustawienia → Dostęp): takie konto widzi tylko ekran z kodem. Przycisk ⛶ włącza pełny ekran; ekran nie gaśnie.
+2. **Pracownik** skanuje kod aparatem telefonu, otwiera się aplikacja → „Wejście” / „Wyjście” (podpowiada właściwe). Kiosk od razu pokazuje nazwisko i godzinę.
+3. **Bezpieczeństwo**: kod zmienia się co 20 s i jest podpisany przez serwer (ważny 60 s), więc zdjęcie kodu nie zadziała w domu. Godzinę odbicia nadaje serwer, nie telefon. Drugie zeskanowanie w ciągu 2 min nie tworzy duplikatu. Pracownik nie może sam zapisać odbicia z pominięciem serwera.
+4. **Panel RCP** (menu „RCP — obecność”): grafik kontra odbicia — spóźnienia, wcześniejsze wyjścia, brak wejścia/wyjścia, praca poza grafikiem. Tolerancja 5 min; nocka kończy się następnego dnia. Kierownik może dodać lub usunąć odbicie ręcznie (✎), każda zmiana trafia do Historii.
+5. **Pracownik** widzi w aplikacji swoje odbicia z ostatnich 7 dni.
+
+Odbicia są w tabeli `records` (kind = `punches`); schemat: `supabase/schema-rcp.sql`, logika: `src/domain/punches.ts`.
+
 ## Uruchomienie lokalnie
 
 ```bash
