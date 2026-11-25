@@ -541,4 +541,15 @@ export const zh: Record<string, string> = {
   'Przenieś…': '调岗…',
   'do rezerwy (mobilna)': '到机动/备岗',
   'Przenieś na inne stanowisko albo do rezerwy — bez zaznaczania nieobecności': '调到其他工位或备岗——不标记缺勤',
+  // rozstawienie wg matrycy
+  'Zmień': '更改',
+  'Zmień…': '更改…',
+  'Tylko ten dzień: {h} h': '仅当天：{h} 小时',
+  'Przenieś na inne stanowisko, do rezerwy albo zmień godziny tylko na ten dzień': '调到其他工位、备岗，或仅修改当天工时',
+  'Rozstaw wg matrycy': '按技能矩阵分配',
+  'Ustaw obecnych ludzi na stanowiskach, na których mają kwalifikacje, tak żeby pokryć jak najwięcej stanowisk': '把在岗人员分配到其有资质的工位，尽量覆盖所有工位',
+  'Nic do zmiany — ludzie już stoją tam, gdzie mają kwalifikacje.': '无需更改——人员已在其有资质的工位。',
+  'Zmienić stanowisko macierzyste?': '是否更改固定工位？',
+  '{n} os. ma stanowisko macierzyste, na którym nie ma kwalifikacji:': '{n} 人的固定工位没有资质：',
+  'Ustaw macierzyste wg matrycy': '按技能矩阵设定固定工位',
 };

@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { level } from '../domain/coverage';
+import { autoAssign } from '../domain/autoAssign';
 import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, useLine } from '../ui';
@@ -41,8 +42,44 @@ export default function Matrix() {
     return brigade === 'all' ? per : [people.filter((w) => level(w, stationId) >= minLevel).length];
   };
 
+  const lineWorkers = state.workers.filter((w) => w.active && w.lineId === lineId);
+  const misplaced = lineWorkers.filter((w) => {
+    const home = stations.find((st) => st.id === w.homeStationId);
+    return home && level(w, home.id) < home.minLevel && stations.some((st) => level(w, st.id) >= st.minLevel);
+  });
+
+  const fixHomes = () => {
+    const changes: { id: string; name: string; to: string }[] = [];
+    for (const b of BRIGADES) {
+      const crew = lineWorkers.filter((w) => w.brigade === b);
+      if (!crew.length) continue;
+      for (const p of autoAssign(crew, stations)) {
+        const w = crew.find((x) => x.id === p.workerId)!;
+        if (!misplaced.includes(w) || !p.stationId) continue;
+        changes.push({ id: w.id, name: w.name, to: p.stationId });
+      }
+    }
+    if (!changes.length) return;
+    const name = (id: string) => stations.find((st) => st.id === id)?.name ?? '?';
+    if (!confirm(t('Zmienić stanowisko macierzyste?') + '\n\n' + changes.map((c) => `${c.name} → ${name(c.to)}`).join('\n'))) return;
+    update((d) => {
+      for (const c of changes) d.workers.find((x) => x.id === c.id)!.homeStationId = c.to;
+    }, 'Stanowiska macierzyste wg matrycy: ' + changes.map((c) => `${c.name} → ${name(c.to)}`).join('; '));
+  };
+
   return (
     <>
+      {misplaced.length > 0 && (
+        <div className="note amber row" style={{ justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+          <span>
+            {t('{n} os. ma stanowisko macierzyste, na którym nie ma kwalifikacji:', { n: misplaced.length })}{' '}
+            <b>{misplaced.map((w) => w.name).join(', ')}</b>
+          </span>
+          <button type="button" className="btn small primary" onClick={fixHomes}>
+            {t('Ustaw macierzyste wg matrycy')}
+          </button>
+        </div>
+      )}
       <div className="page-head">
         <div>
           <div className="sub">{t('Kliknij poziom, aby go zmienić (0 → 1 → 2 → 3 → 4)')}</div>

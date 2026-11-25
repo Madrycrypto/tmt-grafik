@@ -8,6 +8,7 @@ import { OFF, REASON_LABEL, canPair, linePatterns } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
+import { autoAssign } from '../domain/autoAssign';
 import type { SheetTarget } from './ReplacementSheet';
 import { t } from '../i18n';
 
@@ -45,24 +46,28 @@ function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveT
         </>
       ) : (
         <>
-          {onHours && (
-            <button type="button" className="btn small" title={t('Zmień długość zmiany tego dnia (8 h / 12 h)')} onClick={onHours}>
-              {len === 12 ? '→ 8 h' : '→ 12 h'}
-            </button>
-          )}
-          {moveTo && (
+          {(moveTo || onHours) && (
             <select
               className="btn small"
-              aria-label={t('Przenieś')}
-              title={t('Przenieś na inne stanowisko albo do rezerwy — bez zaznaczania nieobecności')}
+              aria-label={t('Zmień')}
+              title={t('Przenieś na inne stanowisko, do rezerwy albo zmień godziny tylko na ten dzień')}
               value=""
-              onChange={(ev) => ev.target.value && moveTo.go(ev.target.value === '-' ? null : ev.target.value)}
+              onChange={(ev) => {
+                const v = ev.target.value;
+                if (v === 'h') onHours?.();
+                else if (v) moveTo?.go(v === '-' ? null : v);
+              }}
             >
-              <option value="">{t('Przenieś…')}</option>
-              <option value="-">{t('do rezerwy (mobilna)')}</option>
-              {moveTo.options.map((o) => (
-                <option key={o.id} value={o.id}>{o.label}</option>
-              ))}
+              <option value="">{t('Zmień…')}</option>
+              {onHours && <option value="h">{t('Tylko ten dzień: {h} h', { h: len === 12 ? 8 : 12 })}</option>}
+              {moveTo && (
+                <optgroup label={t('Przenieś')}>
+                  <option value="-">{t('do rezerwy (mobilna)')}</option>
+                  {moveTo.options.map((o) => (
+                    <option key={o.id} value={o.id}>{o.label}</option>
+                  ))}
+                </optgroup>
+              )}
             </select>
           )}
           {onUncombine ? (
@@ -157,6 +162,25 @@ export default function Obsada() {
       `Ręcznie: ${e.worker.name} → ${stationName(state, stationId || null)}`,
     );
 
+  const arrange = () => {
+    const people = [...new Map(present.filter((e) => e.lineId === lineId).map((e) => [e.worker.id, e])).values()];
+    const current = new Map(people.map((e) => [e.worker.id, e.stationId]));
+    const stations = state.stations.filter((st) => st.lineId === lineId);
+    const plan = autoAssign(people.map((e) => e.worker), stations, current);
+    const moves = plan.filter((p) => p.stationId !== current.get(p.workerId));
+    if (!moves.length) {
+      alert(t('Nic do zmiany — ludzie już stoją tam, gdzie mają kwalifikacje.'));
+      return;
+    }
+    const byId = new Map(people.map((e) => [e.worker.id, e]));
+    update((d) => {
+      for (const m of moves) {
+        const e = byId.get(m.workerId)!;
+        setAssignment(d, { date: e.shift.date, workerId: m.workerId, lineId, stationId: m.stationId, source: 'manual' });
+      }
+    }, `Rozstawienie wg matrycy (${date}): ` + moves.map((m) => `${byId.get(m.workerId)!.worker.name} → ${stationName(state, m.stationId)}`).join('; '));
+  };
+
   const resetDay = () => {
     if (!confirm(t('Usunąć wszystkie ręczne przesunięcia i dodatkowe zmiany na tej linii w tym dniu? Nieobecności zostaną.'))) return;
     update((d) => {
@@ -241,6 +265,9 @@ export default function Obsada() {
               <span><span className="dot h-ok" /> {t('pokryte')}</span>
               <span><span className="dot h-low" /> {t('brak')}</span>
             </span>
+            <button type="button" className="btn small primary" title={t('Ustaw obecnych ludzi na stanowiskach, na których mają kwalifikacje, tak żeby pokryć jak najwięcej stanowisk')} onClick={arrange}>
+              {t('Rozstaw wg matrycy')}
+            </button>
             <button type="button" className="btn small" onClick={resetDay}>
               {t('Przywróć plan dnia')}
             </button>
