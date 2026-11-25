@@ -24,6 +24,8 @@ export interface Pattern {
   offsets: Record<BrigadeId, number>;
   /** dzień, od którego liczony jest cykl (indeks 0) */
   anchor: string;
+  /** brygady używane w tym systemie (domyślnie A–D) */
+  brigades?: BrigadeId[];
 }
 
 export interface Exclusion {
@@ -39,6 +41,8 @@ export interface Exclusion {
 export interface Line {
   id: string;
   name: string;
+  /** systemy zmianowe (wzorce) używane na linii; brak = wszystkie */
+  patternIds?: string[];
 }
 
 export interface Station {
@@ -130,6 +134,16 @@ export interface AppState {
   assignments: Assignment[];
   rotaOverrides: RotaOverride[];
   history: HistoryEntry[];
+}
+
+export function patternBrigades(p: Pattern | undefined): BrigadeId[] {
+  return p?.brigades?.length ? p.brigades : BRIGADES;
+}
+
+export function linePatterns(state: AppState, lineId: string): Pattern[] {
+  const line = state.lines.find((l) => l.id === lineId);
+  const ids = line?.patternIds;
+  return ids?.length ? state.patterns.filter((p) => ids.includes(p.id)) : state.patterns;
 }
 
 export const COLLECTIONS = [

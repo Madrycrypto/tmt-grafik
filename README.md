@@ -6,7 +6,8 @@ Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągły
 
 - **Uniwersalne linie i stanowiska**: dowolna liczba linii, dla każdego stanowiska wymagana liczba osób i minimalny poziom kompetencji.
 - **Mieszany czas pracy**: pracownicy 8 h (PL), 12 h (CN) i agencja (8 lub 12 h) na jednej linii. Pokrycie liczone jest **dla każdej godziny**, więc widać np. dziurę 19:00–23:00.
-- **Generator rotacji 4 brygad** (system 8 h i 12 h):
+- **Systemy zmianowe per linia**: 1, 2 lub 3 zmiany (pn–pt, rotacja tygodniowa) albo 4 brygady w ruchu ciągłym, na zmianach 8 h lub 12 h, z dowolną godziną startu (np. CFM: 06–14 / 14–22). Na jednej linii można łączyć system 8 h i 12 h.
+- **Generator rotacji brygad**:
   - docelowa liczba dni pracy na brygadę w miesiącu; nadwyżka zamienia się w wolne rozłożone równomiernie,
   - kalendarz zakładu z wyłączeniami, np. „niedziela, noc 23–07 nie pracujemy”, święta, postoje,
   - ręczna zmiana komórki jednym kliknięciem,

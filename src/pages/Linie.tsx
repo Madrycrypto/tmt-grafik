@@ -117,6 +117,31 @@ function LineCard({ lineId }: { lineId: string }) {
           Usuń linię
         </button>
       </div>
+      <div className="stack" style={{ marginBottom: 12 }}>
+        <div className="sub">System zmianowy linii (można zaznaczyć kilka, np. 8 h i 12 h na tej samej linii):</div>
+        <div className="row">
+          {state.patterns.map((p) => {
+            const on = !line.patternIds?.length || line.patternIds.includes(p.id);
+            return (
+              <label key={p.id} className={`tag ${on ? 'blue' : ''}`} style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '6px 10px', fontSize: 12 }}>
+                <input
+                  type="checkbox"
+                  checked={on}
+                  onChange={(e) =>
+                    update((d) => {
+                      const l = d.lines.find((x) => x.id === lineId)!;
+                      const cur = l.patternIds?.length ? l.patternIds : d.patterns.map((x) => x.id);
+                      l.patternIds = e.target.checked ? [...new Set([...cur, p.id])] : cur.filter((x) => x !== p.id);
+                    }, `${line.name}: ${e.target.checked ? 'dodano' : 'usunięto'} system ${p.name}`)
+                  }
+                />
+                {p.name}
+              </label>
+            );
+          })}
+        </div>
+        <div className="sub">Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.</div>
+      </div>
       <div className="scroll-x">
         <table style={{ minWidth: 560 }}>
           <thead>

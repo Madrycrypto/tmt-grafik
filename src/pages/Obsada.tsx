@@ -3,7 +3,7 @@ import { setAssignment, stationName } from '../domain/actions';
 import { lineStatus, level } from '../domain/coverage';
 import type { RosterEntry, StationStatus } from '../domain/coverage';
 import { addDays, fmtDate, fmtHour, fmtRange, todayIso } from '../domain/dates';
-import { REASON_LABEL } from '../domain/types';
+import { OFF, REASON_LABEL, linePatterns } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
@@ -53,7 +53,10 @@ export default function Obsada() {
   const [code, setCode] = useState(() => currentWindowCode(state));
   const [target, setTarget] = useState<SheetTarget | null>(null);
 
-  const def = state.shiftDefs.find((d) => d.code === code) ?? state.shiftDefs[0];
+  const lineCodes = new Set(linePatterns(state, lineId).flatMap((p) => p.sequence.filter((c) => c !== OFF)));
+  const lineDefs = state.shiftDefs.filter((d) => lineCodes.has(d.code)).sort((a, b) => a.hours - b.hours || a.start - b.start);
+  const options = lineDefs.length ? lineDefs : state.shiftDefs;
+  const def = options.find((d) => d.code === code) ?? options.find((d) => { const h = new Date().getHours(); return (h >= d.start && h < d.start + d.hours) || (h + 24 >= d.start && h + 24 < d.start + d.hours); }) ?? options[0];
   const window = useMemo(() => ({ start: def?.start ?? 0, end: (def?.start ?? 0) + (def?.hours ?? 8) }), [def]);
   const ls = useMemo(() => lineStatus(state, lineId, date, window), [state, lineId, date, window]);
 
@@ -127,8 +130,8 @@ export default function Obsada() {
           </label>
           <label className="field">
             Zmiana / okno
-            <select value={code} onChange={(e) => setCode(e.target.value)}>
-              {state.shiftDefs.map((d) => (
+            <select value={def?.code ?? ''} onChange={(e) => setCode(e.target.value)}>
+              {options.map((d) => (
                 <option key={d.code} value={d.code}>
                   {shiftLabel(d)}
                 </option>

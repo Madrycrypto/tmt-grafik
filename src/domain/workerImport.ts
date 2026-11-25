@@ -1,5 +1,5 @@
 import { uid } from './actions';
-import { BRIGADES } from './types';
+import { BRIGADES, linePatterns, patternBrigades } from './types';
 import type { AppState, BrigadeId, Worker, WorkerType } from './types';
 
 export type Cell = string | number | boolean | Date | null | undefined;
@@ -81,20 +81,25 @@ function parseType(v: string, agency: string): WorkerType | null {
   return null;
 }
 
-function patternFor(state: AppState, v: string): string | null {
-  const t = norm(v);
-  if (!t) return null;
-  const hours = Number(t.replace(/[^0-9]/g, ''));
-  for (const p of state.patterns) {
-    if (norm(p.name) === t || p.id === t) return p.id;
-    const code = p.sequence.find((c) => c !== 'W');
-    if (hours && state.shiftDefs.find((s) => s.code === code)?.hours === hours) return p.id;
-  }
-  return null;
+function hoursOfPattern(state: AppState, p: AppState['patterns'][number]): number | undefined {
+  return state.shiftDefs.find((s) => s.code === p.sequence.find((c) => c !== 'W'))?.hours;
 }
 
-function patternByHours(state: AppState, hours: number): string | undefined {
-  return state.patterns.find((p) => state.shiftDefs.find((s) => s.code === p.sequence.find((c) => c !== 'W'))?.hours === hours)?.id;
+/** System po nazwie albo po samych godzinach („8h”) — wtedy najpierw systemy linii pracownika. */
+function patternFor(state: AppState, v: string, lineId?: string): string | null {
+  const t = norm(v);
+  if (!t) return null;
+  const exact = state.patterns.find((p) => norm(p.name) === t || p.id === t);
+  if (exact) return exact.id;
+  const hours = Number(t.replace(/[^0-9]/g, ''));
+  if (!hours || /[a-z]{3,}/.test(t.replace(/\b(h|godz|godzin|zmiana)\b/g, ''))) return null;
+  const pool = lineId ? [...linePatterns(state, lineId), ...state.patterns] : state.patterns;
+  return pool.find((p) => hoursOfPattern(state, p) === hours)?.id ?? null;
+}
+
+function patternByHours(state: AppState, hours: number, lineId?: string): string | undefined {
+  const pool = lineId ? [...linePatterns(state, lineId), ...state.patterns] : state.patterns;
+  return pool.find((p) => hoursOfPattern(state, p) === hours)?.id;
 }
 
 function parseActive(v: string): boolean | null {
@@ -145,19 +150,22 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
     const type = parseType(typeRaw, agency) ?? existing?.type ?? 'PL';
     if (typeRaw && !parseType(typeRaw, agency)) item.warnings.push(`nieznany typ „${typeRaw}” → ${type}`);
 
+    const lineRaw = get(r, 'line');
+    const line = lineRaw ? state.lines.find((l) => norm(l.name) === norm(lineRaw)) : state.lines.find((l) => l.id === existing?.lineId);
+    if (!line) item.errors.push(lineRaw ? `nieznana linia „${lineRaw}” (dodaj ją w Linie i stanowiska)` : 'brak linii');
+
     const sysRaw = get(r, 'system');
-    let patternId = patternFor(state, sysRaw) ?? existing?.patternId;
-    if (!patternId) patternId = (type === 'CN' ? patternByHours(state, 12) : patternByHours(state, 8)) ?? state.patterns[0]?.id;
-    if (sysRaw && !patternFor(state, sysRaw)) item.warnings.push(`nieznany system „${sysRaw}”`);
+    let patternId = patternFor(state, sysRaw, line?.id) ?? (sysRaw ? undefined : existing?.patternId);
+    if (!patternId) patternId = (type === 'CN' ? patternByHours(state, 12, line?.id) : patternByHours(state, 8, line?.id)) ?? state.patterns[0]?.id;
+    if (sysRaw && !patternFor(state, sysRaw, line?.id)) item.warnings.push(`nieznany system „${sysRaw}”`);
     if (!patternId) item.errors.push('brak wzorców zmian w ustawieniach');
 
     const bRaw = get(r, 'brigade').toUpperCase().replace(/^BRYG(ADA)?\.?\s*/, '');
     const brigade = (BRIGADES as string[]).includes(bRaw) ? (bRaw as BrigadeId) : existing?.brigade;
     if (!brigade) item.errors.push(bRaw ? `brygada „${bRaw}” (dozwolone A–D)` : 'brak brygady');
 
-    const lineRaw = get(r, 'line');
-    const line = lineRaw ? state.lines.find((l) => norm(l.name) === norm(lineRaw)) : state.lines.find((l) => l.id === existing?.lineId);
-    if (!line) item.errors.push(lineRaw ? `nieznana linia „${lineRaw}” (dodaj ją w Linie i stanowiska)` : 'brak linii');
+    if (brigade && patternId && !patternBrigades(state.patterns.find((p) => p.id === patternId)).includes(brigade))
+      item.warnings.push(`brygada ${brigade} nie występuje w tym systemie zmianowym`);
 
     if (item.errors.length || !line || !brigade || !patternId) return item;
 
@@ -249,10 +257,7 @@ function csvCell(v: string | number): string {
 /** Lista pracowników jako CSV dla polskiego Excela (średnik, BOM). Ten sam format przyjmuje import. */
 export function workersCsv(state: AppState, workers: Worker[]): string {
   const stationNames = [...new Set([...state.stations].sort((a, b) => a.order - b.order).map((s) => s.name))];
-  const hoursOf = (w: Worker) => {
-    const p = state.patterns.find((x) => x.id === w.patternId);
-    return state.shiftDefs.find((s) => s.code === p?.sequence.find((c) => c !== 'W'))?.hours ?? '';
-  };
+  const systemOf = (w: Worker) => state.patterns.find((x) => x.id === w.patternId)?.name ?? '';
   const head = ['Imię i nazwisko', 'Typ', 'Agencja', 'System', 'Brygada', 'Linia', 'Stanowisko', 'Aktywny', ...stationNames];
   const lines = workers.map((w) => {
     const lineStations = state.stations.filter((s) => s.lineId === w.lineId);
@@ -260,7 +265,7 @@ export function workersCsv(state: AppState, workers: Worker[]): string {
       w.name,
       w.type === 'AG' ? 'Agencja' : w.type,
       w.agency ?? '',
-      `${hoursOf(w)}h`,
+      systemOf(w),
       w.brigade,
       state.lines.find((l) => l.id === w.lineId)?.name ?? '',
       state.stations.find((s) => s.id === w.homeStationId)?.name ?? 'rezerwa',

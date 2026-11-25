@@ -137,9 +137,10 @@ button.lv { cursor: pointer; }
 
 .cell { display: flex; align-items: center; justify-content: center; height: 30px; min-width: 30px; border-radius: 6px; font-size: 12px; font-weight: 700; border: 0; width: 100%; }
 button.cell { cursor: pointer; }
-.c-R8 { background: #fff1c2; color: #5a4300; }
+.c-R8, .c-R12 { background: #fff1c2; color: #5a4300; }
 .c-P8 { background: #ffd9a8; color: #5c3300; }
 .c-N8, .c-N12 { background: #2b3445; color: #fff; }
+.c-D8 { background: #ffe39a; color: #5a4300; }
 .c-D12 { background: #ffe39a; color: #5a4300; }
 .c-W { background: var(--line-soft); color: #6a717e; }
 .c-excluded { background: #fbe3e3; color: var(--red-ink); outline: 1px dashed var(--red); outline-offset: -1px; }

@@ -1,5 +1,5 @@
 import { addDays, daysBetween, mod, monthDays, weekday } from './dates';
-import { BRIGADES, OFF } from './types';
+import { OFF, patternBrigades } from './types';
 import type { AppState, BrigadeId, Pattern, ShiftDef } from './types';
 
 export type CellStatus = 'work' | 'off' | 'excluded' | 'trimmed';
@@ -115,7 +115,8 @@ export function summarize(state: AppState, patternId: string, month: string): Br
   const first = days[0];
   const last = days[days.length - 1];
   const target = state.targets.find((t) => t.patternId === patternId && t.month === month);
-  return BRIGADES.map((brigade) => {
+  const pattern = state.patterns.find((p) => p.id === patternId);
+  return patternBrigades(pattern).map((brigade) => {
     const cells = brigadeMonth(state, patternId, brigade, month);
     let hours = 0;
     let n = 0;
@@ -138,14 +139,16 @@ export function summarize(state: AppState, patternId: string, month: string): Br
   });
 }
 
-/** Zmiany wzorca, których danego dnia nie obsadza żadna brygada. */
+/** Zmiany, które według cyklu powinny być danego dnia obsadzone, a nie ma na nich żadnej brygady. */
 export function gapsOnDay(state: AppState, patternId: string, date: string): string[] {
   const p = state.patterns.find((x) => x.id === patternId);
   if (!p) return [];
+  const brigades = patternBrigades(p);
+  const expected = new Set(brigades.map((b) => baseCode(p, b, date)).filter((c) => c !== OFF && !isExcluded(state, date, c)));
   return patternShiftCodes(p).filter(
     (code) =>
-      !isExcluded(state, date, code) &&
-      !BRIGADES.some((b) => {
+      expected.has(code) &&
+      !brigades.some((b) => {
         const c = rotaCell(state, patternId, b, date);
         return c.status === 'work' && c.code === code;
       }),

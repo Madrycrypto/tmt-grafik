@@ -35,7 +35,8 @@ export default function Matrix() {
   };
 
   const coverage = (stationId: string, minLevel: number) => {
-    const per = BRIGADES.map((b) => people.filter((w) => w.brigade === b && level(w, stationId) >= minLevel).length);
+    const present = BRIGADES.filter((b) => people.some((w) => w.brigade === b));
+    const per = present.map((b) => people.filter((w) => w.brigade === b && level(w, stationId) >= minLevel).length);
     return brigade === 'all' ? per : [people.filter((w) => level(w, stationId) >= minLevel).length];
   };
 
@@ -114,7 +115,7 @@ export default function Matrix() {
                 <tr style={{ background: '#f7f8fa' }}>
                   <td className="sticky-col" style={{ fontWeight: 700, background: '#f7f8fa' }}>
                     Osoby z poz. ≥ min
-                    <div className="sub" style={{ fontWeight: 400 }}>{brigade === 'all' ? 'A · B · C · D (cel: min. 2)' : 'cel: min. 2'}</div>
+                    <div className="sub" style={{ fontWeight: 400 }}>{brigade === 'all' ? `${BRIGADES.filter((b) => people.some((w) => w.brigade === b)).join(' · ')} (cel: min. 2)` : 'cel: min. 2'}</div>
                   </td>
                   {stations.map((s) => {
                     const c = coverage(s.id, s.minLevel);

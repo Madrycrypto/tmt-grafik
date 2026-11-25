@@ -6,6 +6,7 @@ import type { AppState, Pattern } from '../domain/types';
 import { normalize, readCloudConfig, resetDemo, writeCloudConfig } from '../data/backend';
 import { useApp } from '../data/AppContext';
 import Access from './Access';
+import Systems from './Systems';
 
 function Connection() {
   const { backend, user, role } = useApp();
@@ -69,7 +70,7 @@ function ShiftsAndPatterns() {
 
   return (
     <section className="card stack">
-      <h2>Zmiany i wzorce rotacji</h2>
+      <h2>Zaawansowane: godziny zmian i cykle</h2>
       <div className="scroll-x">
         <table style={{ minWidth: 460 }}>
           <thead>
@@ -213,6 +214,7 @@ export default function Ustawienia() {
       </div>
       <Connection />
       <Access />
+      <Systems />
       <ShiftsAndPatterns />
       <Data />
     </>

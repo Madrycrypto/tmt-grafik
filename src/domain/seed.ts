@@ -1,5 +1,6 @@
 import type { AppState, BrigadeId, Station, Worker, WorkerType } from './types';
-import { BRIGADES } from './types';
+import { buildSystem } from './templates';
+import { BRIGADES, patternBrigades } from './types';
 
 /** Podstawowa konfiguracja zmian i wzorców — wspólna dla trybu demo i nowej bazy. */
 export function baseConfig(): Pick<AppState, 'shiftDefs' | 'patterns' | 'exclusions'> {
@@ -64,6 +65,9 @@ function feminine(last: string): string {
 interface LineSpec {
   id: string;
   name: string;
+  /** systemy zmianowe linii: 8 h i (opcjonalnie) 12 h */
+  pattern8: string;
+  pattern12?: string;
   stations: [string, number][];
   /** stanowiska domowe pracowników 8 h w każdej brygadzie (null = rezerwa) */
   crew8: (number | null)[];
@@ -78,6 +82,8 @@ const LINES: LineSpec[] = [
   {
     id: 'hvac1',
     name: 'HVAC 1',
+    pattern8: 'p8',
+    pattern12: 'p12',
     stations: [['Montaż parownika', 1], ['Lutowanie', 1], ['Test szczelności', 1], ['Montaż wentylatora', 1], ['Kontrola końcowa', 1], ['Pakowanie', 1]],
     crew8: [0, 1, 3, 5, null],
     crew12: [2, 4],
@@ -86,6 +92,8 @@ const LINES: LineSpec[] = [
   {
     id: 'hvac2',
     name: 'HVAC 2',
+    pattern8: 'p8',
+    pattern12: 'p12',
     stations: [['Montaż obudowy', 1], ['Montaż wiązki', 1], ['Test funkcjonalny', 1], ['Pakowanie', 1], ['Etykietowanie', 1]],
     crew8: [0, 1, 3, 4, null],
     crew12: [2],
@@ -93,16 +101,23 @@ const LINES: LineSpec[] = [
   {
     id: 'cfm1',
     name: 'CFM 1',
+    pattern8: 'sys2_8_06',
     stations: [['Wtrysk / prasa', 1], ['Montaż modułu', 2], ['Kontrola wizualna', 1], ['Pakowanie', 1]],
-    crew8: [1, 1, 3, null],
-    crew12: [0, 2],
-    agency12: 1,
+    crew8: [0, 1, 1, 2, 3, null],
+    crew12: [],
+    agency8: 4,
   },
 ];
 
 export function demoState(): AppState {
   const rand = rng(20261125);
   const s = emptyState();
+  // CFM pracuje na 2 zmianach pn–pt: 06–14 / 14–22
+  const cfm = buildSystem(s, { kind: '2', hours: 8, start: 6 });
+  if (!('error' in cfm)) {
+    s.shiftDefs.push(...cfm.shiftDefs);
+    s.patterns.push(cfm.pattern);
+  }
   let pl = 0;
   let cn = 0;
   const nextName = (type: WorkerType): string => {
@@ -115,7 +130,7 @@ export function demoState(): AppState {
   };
 
   for (const spec of LINES) {
-    s.lines.push({ id: spec.id, name: spec.name });
+    s.lines.push({ id: spec.id, name: spec.name, patternIds: [spec.pattern8, ...(spec.pattern12 ? [spec.pattern12] : [])] });
     const stations: Station[] = spec.stations.map(([name, required], i) => ({
       id: `${spec.id}-s${i + 1}`,
       lineId: spec.id,
@@ -148,9 +163,10 @@ export function demoState(): AppState {
       };
     };
 
+    const brig8 = patternBrigades(s.patterns.find((p) => p.id === spec.pattern8));
     for (const b of BRIGADES) {
-      spec.crew8.forEach((home, i) => s.workers.push(make(b, home, i === spec.agency8 ? 'AG' : 'PL', 'p8')));
-      spec.crew12.forEach((home, i) => s.workers.push(make(b, home, i === spec.agency12 ? 'AG' : 'CN', 'p12')));
+      if (brig8.includes(b)) spec.crew8.forEach((home, i) => s.workers.push(make(b, home, i === spec.agency8 ? 'AG' : 'PL', spec.pattern8)));
+      if (spec.pattern12) spec.crew12.forEach((home, i) => s.workers.push(make(b, home, i === spec.agency12 ? 'AG' : 'CN', spec.pattern12!)));
     }
   }
   return s;

@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
 import { plannedShift, absenceOn } from '../domain/coverage';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
-import { BRIGADES, REASON_LABEL, TYPE_LABEL } from '../domain/types';
+import { BRIGADES, REASON_LABEL, TYPE_LABEL, linePatterns, patternBrigades } from '../domain/types';
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
@@ -14,12 +14,19 @@ function emptyWorker(lineId: string, patternId: string): Worker {
   return { id: uid('w'), name: '', type: 'PL', patternId, brigade: 'A', lineId, homeStationId: null, active: true, skills: {} };
 }
 
+function newWorkerFor(state: Parameters<typeof linePatterns>[0], lineId: string): Worker {
+  return emptyWorker(lineId, linePatterns(state, lineId)[0]?.id ?? state.patterns[0]?.id ?? '');
+}
+
 function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void }) {
   const { state, update } = useApp();
   const [w, setW] = useState<Worker>(initial);
   const isNew = !state.workers.some((x) => x.id === initial.id);
   const stations = state.stations.filter((s) => s.lineId === w.lineId);
   const set = <K extends keyof Worker>(k: K, v: Worker[K]) => setW({ ...w, [k]: v });
+  const systems = linePatterns(state, w.lineId);
+  const systemOptions = systems.some((p) => p.id === w.patternId) ? systems : [...systems, ...state.patterns.filter((p) => p.id === w.patternId)];
+  const brigadeOptions = patternBrigades(state.patterns.find((p) => p.id === w.patternId));
 
   const save = () => {
     if (!w.name.trim()) return;
@@ -69,8 +76,14 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
       <div className="row">
         <label className="field grow">
           System czasu pracy
-          <select value={w.patternId} onChange={(e) => set('patternId', e.target.value)}>
-            {state.patterns.map((p) => (
+          <select
+            value={w.patternId}
+            onChange={(e) => {
+              const b = patternBrigades(state.patterns.find((p) => p.id === e.target.value));
+              setW({ ...w, patternId: e.target.value, brigade: b.includes(w.brigade) ? w.brigade : b[0] });
+            }}
+          >
+            {systemOptions.map((p) => (
               <option key={p.id} value={p.id}>
                 {p.name}
               </option>
@@ -80,7 +93,7 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
         <label className="field">
           Brygada
           <select value={w.brigade} onChange={(e) => set('brigade', e.target.value as Worker['brigade'])}>
-            {BRIGADES.map((b) => (
+            {brigadeOptions.map((b) => (
               <option key={b}>{b}</option>
             ))}
           </select>
@@ -89,7 +102,16 @@ function WorkerForm({ initial, onClose }: { initial: Worker; onClose: () => void
       <div className="row">
         <label className="field grow">
           Linia
-          <select value={w.lineId} onChange={(e) => setW({ ...w, lineId: e.target.value, homeStationId: null })}>
+          <select
+            value={w.lineId}
+            onChange={(e) => {
+              const sys = linePatterns(state, e.target.value);
+              const keep = sys.some((p) => p.id === w.patternId);
+              const pid = keep ? w.patternId : (sys[0]?.id ?? w.patternId);
+              const b = patternBrigades(state.patterns.find((p) => p.id === pid));
+              setW({ ...w, lineId: e.target.value, homeStationId: null, patternId: pid, brigade: b.includes(w.brigade) ? w.brigade : b[0] });
+            }}
+          >
             {state.lines.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -257,7 +279,7 @@ export default function Pracownicy() {
             type="button"
             className="btn primary"
             disabled={!state.lines.length}
-            onClick={() => setEditing(emptyWorker(line !== 'all' ? line : state.lines[0].id, state.patterns[0]?.id ?? ''))}
+            onClick={() => setEditing(newWorkerFor(state, line !== 'all' ? line : state.lines[0].id))}
           >
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}>
               <Icon name="plus" />

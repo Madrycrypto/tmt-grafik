@@ -1,0 +1,64 @@
+import { fmtRange } from './dates';
+import { OFF } from './types';
+import type { AppState, BrigadeId, Pattern, ShiftDef } from './types';
+
+export type SystemKind = '1' | '2' | '3' | '4';
+
+export const SYSTEM_LABEL: Record<SystemKind, string> = {
+  '1': '1 zmiana (pn–pt)',
+  '2': '2 zmiany (pn–pt, rotacja co tydzień)',
+  '3': '3 zmiany (pn–pt, rotacja co tydzień)',
+  '4': '4 brygady — ruch ciągły (7 dni)',
+};
+
+export interface SystemSpec {
+  kind: SystemKind;
+  hours: 8 | 12;
+  /** godzina rozpoczęcia pierwszej zmiany */
+  start: number;
+}
+
+const ANCHOR_MONDAY = '2026-01-05';
+
+/** Buduje wzorzec rotacji i brakujące definicje zmian dla wybranego systemu. */
+export function buildSystem(state: AppState, spec: SystemSpec): { shiftDefs: ShiftDef[]; pattern: Pattern } | { error: string } {
+  const { kind, hours, start } = spec;
+  if (hours === 12 && kind === '3') return { error: 'System 3-zmianowy jest tylko dla zmian 8 h (3 × 8 h = doba).' };
+  const count = kind === '4' ? (hours === 8 ? 3 : 2) : Number(kind);
+  const labels = (hours === 8 ? ['R', 'P', 'N'] : ['D', 'N']).slice(0, count);
+  const slots = labels.map((label, i) => ({ label, start: (start + i * hours) % 24 }));
+  const newDefs: ShiftDef[] = [];
+  const codes = slots.map(({ label, start: st }) => {
+    const existing = [...state.shiftDefs, ...newDefs].find((d) => d.start === st && d.hours === hours && d.label === label);
+    if (existing) return existing.code;
+    const code = `${label}${hours}_${String(st).padStart(2, '0')}`;
+    newDefs.push({ code, label, start: st, hours });
+    return code;
+  });
+  const week = (c: string) => [c, c, c, c, c, OFF, OFF];
+  let sequence: string[];
+  let offsets: Record<BrigadeId, number>;
+  let brigades: BrigadeId[];
+  if (kind === '1') {
+    sequence = week(codes[0]);
+    offsets = { A: 0, B: 0, C: 0, D: 0 };
+    brigades = ['A'];
+  } else if (kind === '2') {
+    sequence = [...week(codes[0]), ...week(codes[1])];
+    offsets = { A: 0, B: 7, C: 0, D: 0 };
+    brigades = ['A', 'B'];
+  } else if (kind === '3') {
+    sequence = [...week(codes[0]), ...week(codes[1]), ...week(codes[2])];
+    offsets = { A: 0, B: 14, C: 7, D: 0 };
+    brigades = ['A', 'B', 'C'];
+  } else {
+    sequence = hours === 8 ? [codes[0], codes[0], codes[1], codes[1], codes[2], codes[2], OFF, OFF] : [codes[0], codes[0], codes[1], codes[1], OFF, OFF, OFF, OFF];
+    offsets = { A: 0, B: 6, C: 4, D: 2 };
+    brigades = ['A', 'B', 'C', 'D'];
+  }
+  const times = slots.map((s) => fmtRange(s.start, hours)).join(' / ');
+  const name = `${SYSTEM_LABEL[kind].split(' (')[0]} ${hours} h${kind === '4' ? '' : ' pn–pt'} (${times})`;
+  const id = `sys${kind}_${hours}_${String(start).padStart(2, '0')}`;
+  if (state.patterns.some((p) => p.id === id)) return { error: 'Taki system już istnieje.' };
+  return { shiftDefs: newDefs, pattern: { id, name, sequence, offsets, anchor: ANCHOR_MONDAY, brigades } };
+}

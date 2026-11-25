@@ -3,7 +3,7 @@ import { uid } from '../domain/actions';
 import { WEEKDAY_LONG, WEEKDAY_SHORT, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
 import { baseCode, brigadeMonth, gapsOnDay, patternShiftCodes, summarize } from '../domain/rota';
 import type { RotaCell } from '../domain/rota';
-import { BRIGADES, OFF } from '../domain/types';
+import { OFF, patternBrigades } from '../domain/types';
 import type { BrigadeId, Exclusion } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { usePersistent } from '../ui';
@@ -18,9 +18,18 @@ export default function Grafik() {
   const pattern = state.patterns.find((p) => p.id === patternId) ?? state.patterns[0];
   const days = monthDays(month);
   const label = (code: string) => (code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
+  const colorOf = (code: string) => {
+    const d = state.shiftDefs.find((x) => x.code === code);
+    return d ? `c-${d.label}${d.hours}` : 'c-W';
+  };
+  const usedBy = (pid: string) =>
+    state.lines
+      .filter((l) => !l.patternIds?.length || l.patternIds.includes(pid))
+      .map((l) => l.name)
+      .join(', ');
 
   const rows = useMemo(
-    () => (pattern ? BRIGADES.map((b) => ({ b, cells: brigadeMonth(state, pattern.id, b, month) })) : []),
+    () => (pattern ? patternBrigades(pattern).map((b) => ({ b, cells: brigadeMonth(state, pattern.id, b, month) })) : []),
     [state, pattern, month],
   );
   const summary = useMemo(() => (pattern ? summarize(state, pattern.id, month) : []), [state, pattern, month]);
@@ -48,7 +57,7 @@ export default function Grafik() {
         t = { id: `${pattern.id}:${month}`, patternId: pattern.id, month, days: {} };
         d.targets.push(t);
       }
-      for (const br of b === 'all' ? BRIGADES : [b]) {
+      for (const br of b === 'all' ? patternBrigades(pattern) : [b]) {
         if (n === undefined) delete t.days[br];
         else t.days[br] = n;
       }
@@ -61,7 +70,7 @@ export default function Grafik() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">Ruch ciągły · 4 brygady · kliknij komórkę, aby zmienić zmianę ręcznie</div>
+          <div className="sub">{patternBrigades(pattern).length} {patternBrigades(pattern).length === 1 ? 'brygada' : 'brygady'} · kliknij komórkę, aby zmienić zmianę ręcznie</div>
           <h1>Grafik brygad</h1>
         </div>
         <div className="row">
@@ -71,6 +80,7 @@ export default function Grafik() {
               {state.patterns.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
+                  {usedBy(p.id) ? ` — ${usedBy(p.id)}` : ''}
                 </option>
               ))}
             </select>
@@ -114,7 +124,7 @@ export default function Grafik() {
                     </td>
                     {cells.map((c) => {
                       const cls =
-                        c.status === 'excluded' ? 'c-excluded' : c.status === 'trimmed' ? 'c-trimmed' : `c-${c.status === 'off' ? 'W' : c.code}`;
+                        c.status === 'excluded' ? 'c-excluded' : c.status === 'trimmed' ? 'c-trimmed' : c.status === 'off' ? 'c-W' : colorOf(c.code);
                       const title =
                         c.status === 'excluded'
                           ? 'wyłączone (kalendarz zakładu)'
@@ -158,7 +168,7 @@ export default function Grafik() {
             const def = state.shiftDefs.find((s) => s.code === c);
             return (
               <span key={c}>
-                <span className={`cell c-${c}`}>{label(c)}</span>
+                <span className={`cell ${colorOf(c)}`}>{label(c)}</span>
                 {def ? fmtRange(def.start, def.hours) : c}
               </span>
             );
@@ -183,7 +193,7 @@ export default function Grafik() {
               Wszystkie
               <input type="number" min={0} max={31} placeholder="np. 20" onBlur={(e) => e.target.value && setTarget('all', e.target.value)} />
             </label>
-            {BRIGADES.map((b) => (
+            {patternBrigades(pattern).map((b) => (
               <label key={b} className="field" style={{ width: 90 }}>
                 Brygada {b}
                 <input type="number" min={0} max={31} value={target?.days[b] ?? ''} onChange={(e) => setTarget(b, e.target.value)} />
