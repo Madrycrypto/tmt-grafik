@@ -50,6 +50,16 @@ Bez skonfigurowanej bazy aplikacja działa w **trybie demo** na danych przykład
 - Na jeden dzień: *Obsada* → przycisk „→ 12 h” przy osobie.
 - Eksport dla kadr ma format „Godziny na stanowiskach (premie)”.
 
+## Obsada na co dzień
+
+- **Zapisywanie** — każda zmiana zapisuje się od razu; stan widać na dole menu („Zsynchronizowano”). Wyjątek: karta pracownika ma przycisk „Zapisz”.
+- **Cofnij / Ponów** — przyciski ↶ ↷ w menu albo Ctrl+Z / Ctrl+Shift+Z. Cofa tylko dane zmienione daną operacją, więc nie nadpisuje zmian innych osób. Działa dla zmian z bieżącej sesji; każdy krok trafia do Historii.
+- **Łączenie stanowisk** — w „Linie i stanowiska” kolumna „Łączy z” (np. OP50-2 ↔ OP51/52). Wtedy jedna osoba może obsłużyć oba: na jeden dzień w Obsadzie („Obsłuży też osoba z”), na stałe w karcie pracownika („Stale obsługuje też”). Podpowiedź zastępstwa woli łączenie od zabierania ludzi z innych stanowisk. Do premii godziny dzielą się po równo między łączone stanowiska.
+- **Zmień…** przy osobie — przeniesienie na inne stanowisko albo do rezerwy (osoba mobilna) bez zaznaczania nieobecności oraz inna długość zmiany tylko na ten dzień. Stałą długość zmiany ustawia się w karcie pracownika.
+- **Rozstaw wg matrycy** — ustawia obecnych na zmianie tak, żeby pokryć jak najwięcej stanowisk; kto ma kwalifikację tam, gdzie stoi, zostaje.
+- **Stanowiska macierzyste wg matrycy** — w Matrycy pasek ostrzega, gdy ktoś ma macierzyste stanowisko bez kwalifikacji, i proponuje poprawkę.
+- **Karta pracownika** — kliknięcie nazwiska w Matrycy lub Obsadzie.
+
 ## Uruchomienie lokalnie
 
 ```bash
