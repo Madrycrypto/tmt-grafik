@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { uid } from '../domain/actions';
+import { patternBrigades } from '../domain/types';
 import type { Station } from '../domain/types';
 import { useApp } from '../data/AppContext';
 
@@ -85,6 +86,25 @@ function LineCard({ lineId }: { lineId: string }) {
     });
   };
 
+  const switchSystem = (patternId: string) => {
+    const p = state.patterns.find((x) => x.id === patternId);
+    if (!p) return;
+    const brig = patternBrigades(p);
+    const moved = state.workers.filter((w) => w.lineId === lineId && !brig.includes(w.brigade));
+    const msg = moved.length
+      ? `\n\n${moved.length} os. jest w brygadach, których ten system nie ma (${[...new Set(moved.map((w) => w.brigade))].join(', ')}) — trafią do brygady ${brig[0]}.`
+      : '';
+    if (!confirm(`Przełączyć ${line.name} (${crew} os.) na „${p.name}”?${msg}`)) return;
+    update((d) => {
+      d.lines.find((x) => x.id === lineId)!.patternIds = [patternId];
+      for (const w of d.workers) {
+        if (w.lineId !== lineId) continue;
+        w.patternId = patternId;
+        if (!brig.includes(w.brigade)) w.brigade = brig[0];
+      }
+    }, `${line.name}: przełączono na system ${p.name} (${crew} os.)`);
+  };
+
   const removeLine = () => {
     if (crew > 0) return alert(`Na linii jest ${crew} aktywnych pracowników. Najpierw przenieś ich na inną linię.`);
     if (!confirm(`Usunąć linię ${line.name} i jej stanowiska?`)) return;
@@ -140,7 +160,22 @@ function LineCard({ lineId }: { lineId: string }) {
             );
           })}
         </div>
-        <div className="sub">Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.</div>
+        <div className="row" style={{ alignItems: 'flex-end' }}>
+          <label className="field">
+            Przełącz całą linię na system
+            <select value="" onChange={(e) => e.target.value && switchSystem(e.target.value)}>
+              <option value="">— wybierz —</option>
+              {state.patterns.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <span className="sub" style={{ paddingBottom: 10 }}>
+            Ustawia system linii i przenosi do niego wszystkich jej pracowników. Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.
+          </span>
+        </div>
       </div>
       <div className="scroll-x">
         <table style={{ minWidth: 560 }}>
