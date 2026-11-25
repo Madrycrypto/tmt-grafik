@@ -144,6 +144,7 @@ button.cell { cursor: pointer; }
 .c-D12 { background: #ffe39a; color: #5a4300; }
 .c-W { background: var(--line-soft); color: #6a717e; }
 .c-excluded { background: #fbe3e3; color: var(--red-ink); outline: 1px dashed var(--red); outline-offset: -1px; }
+.c-holiday { background: #fbe3e3; color: var(--red-ink); }
 .c-trimmed { background: #e8ecff; color: var(--accent); outline: 1px dashed var(--accent); outline-offset: -1px; }
 .c-ov { box-shadow: inset 0 0 0 2px var(--accent); }
 

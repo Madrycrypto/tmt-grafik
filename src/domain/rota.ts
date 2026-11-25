@@ -1,8 +1,9 @@
 import { addDays, daysBetween, mod, monthDays, weekday } from './dates';
-import { OFF, patternBrigades } from './types';
+import { holidayName } from './holidays';
+import { OFF, holidaysOff, patternBrigades } from './types';
 import type { AppState, BrigadeId, Pattern, ShiftDef } from './types';
 
-export type CellStatus = 'work' | 'off' | 'excluded' | 'trimmed';
+export type CellStatus = 'work' | 'off' | 'excluded' | 'trimmed' | 'holiday';
 
 export interface RotaCell {
   date: string;
@@ -44,12 +45,14 @@ export function brigadeMonth(state: AppState, patternId: string, brigade: Brigad
   if (hit) return hit;
 
   const p = state.patterns.find((x) => x.id === patternId);
+  const freeOnHolidays = holidaysOff(p);
   const cells: RotaCell[] = monthDays(month).map((date) => {
     if (!p) return { date, code: OFF, status: 'off', overridden: false };
     const ov = state.rotaOverrides.find((o) => o.patternId === patternId && o.brigade === brigade && o.date === date);
     const code = ov ? ov.code : baseCode(p, brigade, date);
     let status: CellStatus = code === OFF ? 'off' : 'work';
-    if (status === 'work' && !ov && isExcluded(state, date, code)) status = 'excluded';
+    if (status === 'work' && !ov && freeOnHolidays && holidayName(date)) status = 'holiday';
+    else if (status === 'work' && !ov && isExcluded(state, date, code)) status = 'excluded';
     return { date, code, status, overridden: !!ov };
   });
 
@@ -144,6 +147,7 @@ export function gapsOnDay(state: AppState, patternId: string, date: string): str
   const p = state.patterns.find((x) => x.id === patternId);
   if (!p) return [];
   const brigades = patternBrigades(p);
+  if (holidaysOff(p) && holidayName(date)) return [];
   const expected = new Set(brigades.map((b) => baseCode(p, b, date)).filter((c) => c !== OFF && !isExcluded(state, date, c)));
   return patternShiftCodes(p).filter(
     (code) =>

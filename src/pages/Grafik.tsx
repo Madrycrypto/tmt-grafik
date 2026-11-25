@@ -3,9 +3,10 @@ import { uid } from '../domain/actions';
 import { WEEKDAY_LONG, WEEKDAY_SHORT, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
 import { baseCode, brigadeMonth, gapsOnDay, patternShiftCodes, summarize } from '../domain/rota';
 import type { RotaCell } from '../domain/rota';
-import { OFF, patternBrigades } from '../domain/types';
+import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import type { BrigadeId, Exclusion } from '../domain/types';
 import { useApp } from '../data/AppContext';
+import { holidayName } from '../domain/holidays';
 import { usePersistent } from '../ui';
 import HrExportSheet from './HrExport';
 
@@ -103,7 +104,7 @@ export default function Grafik() {
               <tr>
                 <th className="sticky-col" style={{ width: 96 }}>Brygada</th>
                 {days.map((d) => (
-                  <th key={d} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 ? 'var(--red-ink)' : undefined }}>
+                  <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 || holidayName(d) ? 'var(--red-ink)' : undefined }}>
                     {WEEKDAY_SHORT[weekday(d)]}
                     <br />
                     {d.slice(8)}
@@ -124,9 +125,19 @@ export default function Grafik() {
                     </td>
                     {cells.map((c) => {
                       const cls =
-                        c.status === 'excluded' ? 'c-excluded' : c.status === 'trimmed' ? 'c-trimmed' : c.status === 'off' ? 'c-W' : colorOf(c.code);
-                      const title =
                         c.status === 'excluded'
+                          ? 'c-excluded'
+                          : c.status === 'trimmed'
+                            ? 'c-trimmed'
+                            : c.status === 'holiday'
+                              ? 'c-holiday'
+                              : c.status === 'off'
+                                ? 'c-W'
+                                : colorOf(c.code);
+                      const title =
+                        c.status === 'holiday'
+                          ? `święto: ${holidayName(c.date)}`
+                          : c.status === 'excluded'
                           ? 'wyłączone (kalendarz zakładu)'
                           : c.status === 'trimmed'
                             ? 'dodatkowe wolne (cel dni)'
@@ -136,7 +147,7 @@ export default function Grafik() {
                       return (
                         <td key={c.date} style={{ padding: '4px 2px' }}>
                           <button type="button" className={`cell ${cls} ${c.overridden ? 'c-ov' : ''}`} title={`${c.date} ${label(c.code)} ${title}`} onClick={() => cycle(b, c)}>
-                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? 'w' : label(c.code)}
+                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? 'w' : c.status === 'holiday' ? 'Ś' : label(c.code)}
                           </button>
                         </td>
                       );
@@ -176,6 +187,7 @@ export default function Grafik() {
           <span><span className="cell c-W">W</span>wolne</span>
           <span><span className="cell c-trimmed">w</span>dodatkowe wolne (cel dni)</span>
           <span><span className="cell c-excluded">✕</span>wyłączone</span>
+          <span><span className="cell c-holiday">Ś</span>święto ustawowe{holidaysOff(pattern) ? '' : ' (ten system pracuje w święta)'}</span>
           <span><span className="cell c-W c-ov">R</span>zmiana ręczna</span>
         </div>
       </section>

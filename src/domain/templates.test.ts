@@ -31,7 +31,7 @@ describe('systemy 1/2/3/4-zmianowe', () => {
     const p = s.patterns.find((x) => x.id === id)!;
     for (const d of monthDays('2026-12')) {
       const working = patternBrigades(p).map((b) => rotaCell(s, id, b, d)).filter((c) => c.status === 'work');
-      const weekend = weekday(d) === 0 || weekday(d) === 6;
+      const weekend = weekday(d) === 0 || weekday(d) === 6 || ['2026-12-24', '2026-12-25', '2026-12-26'].includes(d);
       if (kind !== '4' && weekend) expect(working).toHaveLength(0);
       else {
         expect(working).toHaveLength(shifts);
@@ -84,5 +84,30 @@ describe('nazwy i luki', () => {
     expect(s.patterns.find((p) => p.id === id)!.name).toBe('2 zmiany 8 h pn–pt (06:00–14:00 / 14:00–22:00)');
     expect(s.shiftDefs.some((d) => d.start === 22)).toBe(false);
     expect(gapsOnDay(s, id, '2026-12-05')).toEqual([]);
+  });
+});
+
+describe('święta ustawowe', () => {
+  it('Wielkanoc i Boże Ciało liczone poprawnie', async () => {
+    const { easter, polishHolidays } = await import('./holidays');
+    expect(easter(2026)).toBe('2026-04-05');
+    expect(easter(2027)).toBe('2027-03-28');
+    expect(polishHolidays(2026).get('2026-06-04')).toBe('Boże Ciało');
+    expect(polishHolidays(2026).get('2026-12-24')).toBe('Wigilia');
+    expect(polishHolidays(2026).size).toBe(14);
+  });
+
+  it('2 zmiany: 24–26 grudnia wolne jak weekend, bez luk; ruch ciągły pracuje', () => {
+    const { s, id } = withSystem('2', 8, 7);
+    for (const d of ['2026-12-24', '2026-12-25']) {
+      const cells = ['A', 'B'].map((b) => rotaCell(s, id, b as 'A', d));
+      expect(cells.every((c) => c.status !== 'work')).toBe(true);
+      expect(cells.some((c) => c.status === 'holiday')).toBe(true);
+      expect(gapsOnDay(s, id, d)).toEqual([]);
+    }
+    expect(summarize(s, id, '2026-12').map((x) => x.days)).toEqual([21, 21]);
+    const c = withSystem('4', 8, 7);
+    const working = ['A', 'B', 'C', 'D'].map((b) => rotaCell(c.s, c.id, b as 'A', '2026-12-24')).filter((x) => x.status === 'work');
+    expect(working).toHaveLength(3);
   });
 });

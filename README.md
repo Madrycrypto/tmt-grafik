@@ -9,6 +9,7 @@ Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągły
 - **Systemy zmianowe per linia**: 1, 2 lub 3 zmiany (pn–pt, rotacja tygodniowa) albo 4 brygady w ruchu ciągłym, na zmianach 8 h lub 12 h, z dowolną godziną startu (np. CFM: 06–14 / 14–22). Na jednej linii można łączyć system 8 h i 12 h.
 - **Generator rotacji brygad**:
   - docelowa liczba dni pracy na brygadę w miesiącu; nadwyżka zamienia się w wolne rozłożone równomiernie,
+  - **święta ustawowe** (14 dni, z Wigilią od 2025 r. i ruchomymi: Wielkanoc, Zielone Świątki, Boże Ciało): w systemach 1/2/3-zmianowych linia ma wolne jak w weekend, w ruchu ciągłym pracuje — przełącznik „wolne w święta” przy każdym systemie,
   - kalendarz zakładu z wyłączeniami, np. „niedziela, noc 23–07 nie pracujemy”, święta, postoje,
   - ręczna zmiana komórki jednym kliknięciem,
   - wiersz „Luki” pokazujący zmiany bez brygady,

@@ -26,6 +26,8 @@ export interface Pattern {
   anchor: string;
   /** brygady używane w tym systemie (domyślnie A–D) */
   brigades?: BrigadeId[];
+  /** czy w święta ustawowe linia nie pracuje; domyślnie tak dla systemów poniżej 4 brygad */
+  holidaysOff?: boolean;
 }
 
 export interface Exclusion {
@@ -138,6 +140,11 @@ export interface AppState {
 
 export function patternBrigades(p: Pattern | undefined): BrigadeId[] {
   return p?.brigades?.length ? p.brigades : BRIGADES;
+}
+
+export function holidaysOff(p: Pattern | undefined): boolean {
+  if (!p) return false;
+  return p.holidaysOff ?? patternBrigades(p).length < 4;
 }
 
 export function linePatterns(state: AppState, lineId: string): Pattern[] {

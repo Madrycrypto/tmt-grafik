@@ -1,5 +1,6 @@
 import { absenceOn, assignmentOn, plannedShift } from './coverage';
 import { addDays, fmtHour, monthDays, weekday } from './dates';
+import { holidayName } from './holidays';
 import type { AppState, Worker } from './types';
 import { TYPE_LABEL } from './types';
 
@@ -38,7 +39,7 @@ export function dayEntry(state: AppState, w: Worker, date: string): DayEntry {
   const ab = absenceOn(state, w.id, date);
   const shift = plannedShift(state, w, date);
   if (ab) return { date, code: ab.reason, hours: 0, night: 0, sunday: 0, extra: false, absence: ab.reason };
-  if (!shift) return { date, code: 'W', hours: 0, night: 0, sunday: 0, extra: false };
+  if (!shift) return { date, code: holidayName(date) ? 'ŚW' : 'W', hours: 0, night: 0, sunday: 0, extra: false };
   const { start, end } = shift;
   const night = NIGHT.reduce((s, [a, b]) => s + overlap(start, end, a, b), 0);
   const sunday = (weekday(date) === 0 ? overlap(start, end, 0, 24) : 0) + (weekday(addDays(date, 1)) === 0 ? overlap(start, end, 24, 48) : 0);
@@ -151,7 +152,7 @@ export function hrMonthlyCsv(state: AppState, f: HrFilter): string {
   ]);
   const legend = [
     [],
-    ['Legenda: 07-15 = zmiana od 7:00 do 15:00 · * = dodatkowa zmiana (poza grafikiem) · W = wolne · L4 · UW = urlop · NN = nieobecność nieusprawiedliwiona'],
+    ['Legenda: 07-15 = zmiana od 7:00 do 15:00 · * = dodatkowa zmiana (poza grafikiem) · W = wolne · ŚW = święto ustawowe · L4 · UW = urlop · NN = nieobecność nieusprawiedliwiona'],
     [`Wygenerowano: ${new Date().toLocaleString('pl-PL')} · TMT Grafik`],
   ];
   return csv([head, ...rows, ...legend]);
@@ -163,7 +164,7 @@ export function hrDailyCsv(state: AppState, f: HrFilter): string {
   const rows: (string | number)[][] = [];
   for (const s of hrSummary(state, f)) {
     for (const d of s.days) {
-      if (d.code === 'W') continue;
+      if (d.code === 'W' || d.code === 'ŚW') continue;
       rows.push([
         d.date,
         ['niedziela', 'poniedziałek', 'wtorek', 'środa', 'czwartek', 'piątek', 'sobota'][weekday(d.date)],

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { fmtRange } from '../domain/dates';
 import { SYSTEM_LABEL, buildSystem } from '../domain/templates';
 import type { SystemKind } from '../domain/templates';
-import { OFF, patternBrigades } from '../domain/types';
+import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import { useApp } from '../data/AppContext';
 
 /** Dodawanie systemów 1/2/3/4-zmianowych (8 h lub 12 h) i przypisanie ich do linii. */
@@ -56,6 +56,18 @@ export default function Systems() {
                 brygady {patternBrigades(p).join(', ')} · {shifts.join(' / ')} · {workers} os. · linie: {lines.join(', ') || '—'}
               </div>
             </span>
+            <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+              <input
+                type="checkbox"
+                checked={holidaysOff(p)}
+                onChange={(e) =>
+                  update((d) => {
+                    d.patterns.find((x) => x.id === p.id)!.holidaysOff = e.target.checked;
+                  }, `${p.name}: ${e.target.checked ? 'wolne w święta ustawowe' : 'praca w święta ustawowe'}`)
+                }
+              />
+              wolne w święta
+            </label>
             <button
               type="button"
               className="btn small"
