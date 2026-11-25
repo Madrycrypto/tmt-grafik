@@ -11,7 +11,7 @@ create table if not exists public.records (
 );
 
 create or replace function public.touch_records() returns trigger
-language plpgsql as $$
+language plpgsql set search_path = '' as $$
 begin
   new.updated_at := now();
   return new;
@@ -52,9 +52,12 @@ language sql stable security definer set search_path = public as $$
   where lower(email) = lower(coalesce(auth.jwt() ->> 'email', ''));
 $$;
 
-revoke execute on function public.my_role() from anon;
-revoke execute on function public.is_allowed() from anon;
-revoke execute on function public.can_edit() from anon;
+revoke execute on function public.my_role() from public, anon;
+revoke execute on function public.is_allowed() from public, anon;
+revoke execute on function public.can_edit() from public, anon;
+grant execute on function public.my_role() to authenticated;
+grant execute on function public.is_allowed() to authenticated;
+grant execute on function public.can_edit() to authenticated;
 
 -- Dostęp tylko z ważnym tokenem logowania i tylko dla osób z listy allowed_users.
 alter table public.records enable row level security;
@@ -119,6 +122,8 @@ begin
   end if;
   return new;
 end $$;
+
+revoke execute on function public.check_allowed_signup() from public, anon, authenticated;
 
 drop trigger if exists tmt_check_allowed_signup on auth.users;
 create trigger tmt_check_allowed_signup before insert on auth.users
