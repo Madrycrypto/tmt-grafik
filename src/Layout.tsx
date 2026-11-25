@@ -24,8 +24,24 @@ function SyncBadge({ dark }: { dark?: boolean }) {
       </span>
     );
   return (
-    <span className="sync" style={{ color }}>
+    <span className="sync" style={{ color }} title={t('Zmiany zapisują się automatycznie')}>
       <span style={{ color: sync === 'saving' ? '#f5b74a' : '#6cc08f' }}>●</span> {sync === 'saving' ? t('Zapisywanie…') : t('Zsynchronizowano')}
+    </span>
+  );
+}
+
+function UndoButtons({ dark, compact }: { dark?: boolean; compact?: boolean }) {
+  const { undoLabel, redoLabel, undo, redo, canEdit } = useApp();
+  if (!canEdit) return null;
+  const style = dark ? { color: '#fff', borderColor: '#3a4660', background: 'transparent' } : undefined;
+  return (
+    <span className="undo-bar" style={{ display: 'inline-flex', gap: 6 }}>
+      <button type="button" className="btn small" style={style} disabled={!undoLabel} onClick={undo} title={undoLabel ? `${t('Cofnij')}: ${undoLabel} (Ctrl+Z)` : t('Nic do cofnięcia')} aria-label={t('Cofnij')}>
+        ↶{compact ? '' : ` ${t('Cofnij')}`}
+      </button>
+      <button type="button" className="btn small" style={style} disabled={!redoLabel} onClick={redo} title={redoLabel ? `${t('Ponów')}: ${redoLabel} (Ctrl+Shift+Z)` : t('Nic do ponowienia')} aria-label={t('Ponów')}>
+        ↷
+      </button>
     </span>
   );
 }
@@ -44,6 +60,7 @@ export default function Layout() {
           </NavLink>
         ))}
         <div className="side-foot">
+          <UndoButtons dark />
           <LangSwitch dark />
           <SyncBadge dark />
           <span>{user}</span>
@@ -52,6 +69,7 @@ export default function Layout() {
       <header className="mobile-top">
         <strong style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{t('TMT Grafik')}</strong>
         <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
+          <UndoButtons dark compact />
           <SyncBadge dark />
           <LangSwitch dark />
         </span>

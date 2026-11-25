@@ -530,4 +530,11 @@ export const zh: Record<string, string> = {
   'Obsłuży też osoba z': '由此工位人员兼顾',
   'Odłącz': '取消兼顾',
   'Ta osoba przestaje obsługiwać to stanowisko w tym dniu': '当天此人不再兼顾该工位',
+  // cofanie
+  'Ponów': '重做',
+  'zmiana': '更改',
+  'Nic do cofnięcia': '没有可撤销的操作',
+  'Nic do ponowienia': '没有可重做的操作',
+  'Część danych zmienił w międzyczasie ktoś inny — tych nie ruszano ({n}).': '部分数据已被他人修改，这些未作更改（{n}）。',
+  'Zmiany zapisują się automatycznie': '更改会自动保存',
 };

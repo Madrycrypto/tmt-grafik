@@ -4,6 +4,8 @@ import type { Session } from '@supabase/supabase-js';
 import { log } from '../domain/actions';
 import { todayIso } from '../domain/dates';
 import { scheduleNotices } from '../domain/notify';
+import { applyChanges, diffState } from '../domain/undo';
+import type { UndoEntry } from '../domain/undo';
 import type { AppState } from '../domain/types';
 import { applyRemote, cloudBackend, demoBackend, readCloudConfig } from './backend';
 import type { Backend } from './backend';
@@ -24,6 +26,11 @@ interface AppCtx {
   /** zmiana stanu na kopii roboczej; opcjonalny wpis do historii */
   update: (fn: (draft: AppState) => void, historyText?: string) => void;
   replaceAll: (next: AppState) => void;
+  /** opis ostatniej zmiany do cofnięcia / ponowienia (tylko zmiany z tej sesji) */
+  undoLabel: string | null;
+  redoLabel: string | null;
+  undo: () => void;
+  redo: () => void;
   reload: () => Promise<void>;
 }
 
@@ -133,8 +140,17 @@ export function AppProvider({
     [backend],
   );
 
-  const update = useCallback(
-    (fn: (draft: AppState) => void, historyText?: string) => {
+  const undoStack = useRef<UndoEntry[]>([]);
+  const redoStack = useRef<UndoEntry[]>([]);
+  const [undoLabel, setUndoLabel] = useState<string | null>(null);
+  const [redoLabel, setRedoLabel] = useState<string | null>(null);
+  const refreshUndo = () => {
+    setUndoLabel(undoStack.current.at(-1)?.label ?? null);
+    setRedoLabel(redoStack.current.at(-1)?.label ?? null);
+  };
+
+  const commit = useCallback(
+    (fn: (draft: AppState) => void, historyText: string | undefined, mode: 'do' | 'undo' | 'redo') => {
       const prev = stateRef.current;
       if (!prev) return;
       if (!canEdit) {
@@ -143,6 +159,15 @@ export function AppProvider({
       }
       const draft = structuredClone(prev);
       fn(draft);
+      if (mode === 'do') {
+        const changes = diffState(prev, draft);
+        if (changes.length) {
+          undoStack.current.push({ label: historyText ?? t('zmiana'), changes });
+          if (undoStack.current.length > 50) undoStack.current.shift();
+          redoStack.current = [];
+          refreshUndo();
+        }
+      }
       if (historyText) log(draft, user, historyText);
       stateRef.current = draft;
       setState(draft);
@@ -164,6 +189,49 @@ export function AppProvider({
     },
     [persist, user, canEdit, backend],
   );
+
+  const update = useCallback((fn: (draft: AppState) => void, historyText?: string) => commit(fn, historyText, 'do'), [commit]);
+
+  const step = useCallback(
+    (dir: 'undo' | 'redo') => {
+      const from = dir === 'undo' ? undoStack.current : redoStack.current;
+      const to = dir === 'undo' ? redoStack.current : undoStack.current;
+      const entry = from.pop();
+      if (!entry) return;
+      let conflicts = 0;
+      commit(
+        (d) => {
+          conflicts = applyChanges(d, entry.changes, dir);
+        },
+        `${dir === 'undo' ? 'Cofnięto' : 'Ponowiono'}: ${entry.label}`,
+        dir,
+      );
+      to.push(entry);
+      refreshUndo();
+      if (conflicts) alert(t('Część danych zmienił w międzyczasie ktoś inny — tych nie ruszano ({n}).', { n: conflicts }));
+    },
+    [commit],
+  );
+  const undo = useCallback(() => step('undo'), [step]);
+  const redo = useCallback(() => step('redo'), [step]);
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey) return;
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT' || el.isContentEditable)) return;
+      const k = e.key.toLowerCase();
+      if (k === 'z' && !e.shiftKey) {
+        e.preventDefault();
+        undo();
+      } else if ((k === 'z' && e.shiftKey) || k === 'y') {
+        e.preventDefault();
+        redo();
+      }
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [undo, redo]);
 
   const replaceAll = useCallback(
     (next: AppState) => {
@@ -202,7 +270,7 @@ export function AppProvider({
   if (!state) return <div className="splash">{t('Wczytywanie…')}</div>;
 
   return (
-    <Ctx.Provider value={{ state, backend, user, session, role: role ?? 'viewer', canEdit, sync, syncError, update, replaceAll, reload }}>
+    <Ctx.Provider value={{ state, backend, user, session, role: role ?? 'viewer', canEdit, sync, syncError, update, replaceAll, undoLabel, redoLabel, undo, redo, reload }}>
       {children}
     </Ctx.Provider>
   );
