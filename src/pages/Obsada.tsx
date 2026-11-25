@@ -16,7 +16,7 @@ function deficitWindow(s: StationStatus, start: number): { start: number; end: n
   return { start: start + low[0], end: start + low[low.length - 1] + 1 };
 }
 
-function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine }: { e: RosterEntry; at?: string; names?: (id: string) => string; onAbsent: () => void; onUndo: () => void; onHours?: () => void; onUncombine?: () => void }) {
+function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveTo }: { e: RosterEntry; at?: string; names?: (id: string) => string; onAbsent: () => void; onUndo: () => void; onHours?: () => void; onUncombine?: () => void; moveTo?: { options: { id: string; label: string }[]; go: (stationId: string | null) => void } }) {
   const here = at ?? e.stationId;
   const lv = here ? level(e.worker, here) : 0;
   const others = [e.stationId, ...e.also].filter((x): x is string => !!x && x !== here);
@@ -49,6 +49,21 @@ function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine }: { e
             <button type="button" className="btn small" title={t('Zmień długość zmiany tego dnia (8 h / 12 h)')} onClick={onHours}>
               {len === 12 ? '→ 8 h' : '→ 12 h'}
             </button>
+          )}
+          {moveTo && (
+            <select
+              className="btn small"
+              aria-label={t('Przenieś')}
+              title={t('Przenieś na inne stanowisko albo do rezerwy — bez zaznaczania nieobecności')}
+              value=""
+              onChange={(ev) => ev.target.value && moveTo.go(ev.target.value === '-' ? null : ev.target.value)}
+            >
+              <option value="">{t('Przenieś…')}</option>
+              <option value="-">{t('do rezerwy (mobilna)')}</option>
+              {moveTo.options.map((o) => (
+                <option key={o.id} value={o.id}>{o.label}</option>
+              ))}
+            </select>
           )}
           {onUncombine ? (
             <button type="button" className="btn small" title={t('Ta osoba przestaje obsługiwać to stanowisko w tym dniu')} onClick={onUncombine}>
@@ -254,6 +269,10 @@ export default function Obsada() {
                     onUndo={() => undoAbsence(e)}
                     onHours={toggleHours(e)}
                     onUncombine={guest ? () => combine(e, s.station.id, false) : undefined}
+                    moveTo={guest ? undefined : {
+                      options: ls.statuses.filter((o) => o.station.id !== s.station.id).map((o) => ({ id: o.station.id, label: `${o.station.name} (${t('poz.')} ${level(e.worker, o.station.id)})` })),
+                      go: (to) => assignReserve(e, to ?? ''),
+                    }}
                   />
                 );
               })}

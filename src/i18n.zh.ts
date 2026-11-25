@@ -537,4 +537,8 @@ export const zh: Record<string, string> = {
   'Nic do ponowienia': '没有可重做的操作',
   'Część danych zmienił w międzyczasie ktoś inny — tych nie ruszano ({n}).': '部分数据已被他人修改，这些未作更改（{n}）。',
   'Zmiany zapisują się automatycznie': '更改会自动保存',
+  'Przenieś': '调岗',
+  'Przenieś…': '调岗…',
+  'do rezerwy (mobilna)': '到机动/备岗',
+  'Przenieś na inne stanowisko albo do rezerwy — bez zaznaczania nieobecności': '调到其他工位或备岗——不标记缺勤',
 };
