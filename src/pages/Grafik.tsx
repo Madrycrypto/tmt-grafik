@@ -7,6 +7,7 @@ import { BRIGADES, OFF } from '../domain/types';
 import type { BrigadeId, Exclusion } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { usePersistent } from '../ui';
+import HrExportSheet from './HrExport';
 
 const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
 
@@ -24,6 +25,7 @@ export default function Grafik() {
   );
   const summary = useMemo(() => (pattern ? summarize(state, pattern.id, month) : []), [state, pattern, month]);
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
+  const [hr, setHr] = useState(false);
 
   if (!pattern) return <div className="card empty">Brak zdefiniowanych wzorców zmian (Ustawienia).</div>;
   const codes = patternShiftCodes(pattern);
@@ -77,8 +79,12 @@ export default function Grafik() {
             Miesiąc
             <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
           </label>
+          <button type="button" className="btn primary" onClick={() => setHr(true)}>
+            Eksport dla kadr
+          </button>
         </div>
       </div>
+      {hr && <HrExportSheet month={month} onClose={() => setHr(false)} />}
 
       <section className="card">
         <div className="scroll-x">

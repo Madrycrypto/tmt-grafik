@@ -8,6 +8,7 @@ import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
 import { Icon, Sheet, TypeTag } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
+import HrExportSheet from './HrExport';
 
 function emptyWorker(lineId: string, patternId: string): Worker {
   return { id: uid('w'), name: '', type: 'PL', patternId, brigade: 'A', lineId, homeStationId: null, active: true, skills: {} };
@@ -212,7 +213,7 @@ export default function Pracownicy() {
   const [type, setType] = useState('all');
   const [brig, setBrig] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
-  const [sheet, setSheet] = useState<'import' | 'remove' | null>(null);
+  const [sheet, setSheet] = useState<'import' | 'remove' | 'hr' | null>(null);
 
   const list = useMemo(
     () =>
@@ -271,6 +272,9 @@ export default function Pracownicy() {
           </button>
           <button type="button" className="btn" onClick={() => setSheet('remove')}>
             Usuń listą
+          </button>
+          <button type="button" className="btn" onClick={() => setSheet('hr')}>
+            Eksport dla kadr
           </button>
         </div>
       </div>
@@ -366,6 +370,7 @@ export default function Pracownicy() {
       {editing && <WorkerForm initial={editing} onClose={() => setEditing(null)} />}
       {sheet === 'import' && <ImportSheet onClose={() => setSheet(null)} />}
       {sheet === 'remove' && <RemoveListSheet onClose={() => setSheet(null)} />}
+      {sheet === 'hr' && <HrExportSheet onClose={() => setSheet(null)} />}
     </>
   );
 }

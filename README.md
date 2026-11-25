@@ -25,6 +25,10 @@ Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągły
   - eksport do CSV w tym samym formacie, więc można wyeksportować, poprawić w Excelu i wczytać z powrotem,
   - zaznaczanie wielu osób: zmiana brygady, przeniesienie na inną linię, dezaktywacja, usunięcie,
   - **usuwanie listą**: wklej nazwiska albo wczytaj plik; aplikacja pokaże, kogo znalazła, a kogo nie ma w bazie.
+- **Eksport dla kadr** (Grafik lub Pracownicy → „Eksport dla kadr”), plik CSV otwierany w Excelu:
+  - *tabela miesięczna*: nazwisko × dzień ze zmianą według grafiku (np. `07-15`, `23-07`, `07-15*` dla dodatkowej), W, L4, UW, NN; na końcu dni pracy, godziny, godziny nocne 22–6, godziny w niedzielę, godziny dodatkowe i dni nieobecności,
+  - *lista dzienna*: wiersz na każdy dzień pracy lub nieobecności, ze stanowiskiem i godzinami od–do,
+  - filtr po linii, typie pracownika albo konkretnej agencji (osobny plik dla każdej agencji).
 - **Synchronizacja na żywo** między telefonem a komputerem (Supabase Realtime).
 - **Bezpieczeństwo**: logowanie, token JWT przy każdym zapytaniu, lista dozwolonych e-maili z rolami `admin` / `editor` / `viewer`.
 
@@ -96,4 +100,5 @@ supabase/       schemat bazy z regułami dostępu
 
 - Zmiana należy do dnia, w którym się zaczyna (nocka 23–07 z niedzieli to „niedziela N”).
 - Kontrola tygodniowa zgłasza tygodnie z odpoczynkiem poniżej 35 h. Art. 133 § 2 KP dopuszcza 24 h przy zmianie zmiany, więc to informacja, a nie blokada.
+- Pora nocna przyjęta jako 22:00–6:00 (do potwierdzenia z kadrami; jedna stała `NIGHT` w `src/domain/hrExport.ts`).
 - Normę godzin w okresie rozliczeniowym ustawiasz pośrednio przez docelową liczbę dni brygad.
