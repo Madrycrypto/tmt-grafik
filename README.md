@@ -47,23 +47,20 @@ npm run build
 
 1. Na [supabase.com](https://supabase.com) utwórz projekt w regionie **Central EU (Frankfurt)**.
 2. Otwórz **SQL Editor → New query**, wklej plik [`supabase/schema.sql`](supabase/schema.sql) i kliknij **Run**.
-3. Dodaj siebie do listy dostępu (w SQL Editor):
+3. Dodaj siebie jako pierwszego administratora (jednorazowo, w SQL Editor):
    ```sql
    insert into public.allowed_users (email, role) values ('twoj.email@firma.pl', 'admin');
    ```
-   Kolejne osoby dodajesz tak samo. Role:
-   - `editor` może zmieniać dane,
-   - `viewer` ma tylko podgląd,
-   - `admin` może dodatkowo wczytywać kopie danych.
-4. **Authentication → Users → Add user**: utwórz konto (e-mail + hasło) dla każdej osoby z listy.
-5. **Authentication → Sign In / Providers → Email**: wyłącz **Allow new users to sign up**, żeby nikt obcy nie zakładał kont.
-6. **Project Settings → API**: skopiuj *Project URL* i klucz *anon public*.
+4. **Authentication → URL Configuration**: w polu *Site URL* wpisz adres aplikacji, np. `https://madrycrypto.github.io/tmt-grafik/`, i dodaj go też w *Redirect URLs*. Na ten adres wracają linki z e-maili (potwierdzenie konta, reset hasła).
+5. Załóż swoje konto: w aplikacji kliknij **Pierwsze logowanie**, podaj e-mail i hasło, a potem kliknij link z e-maila. Możesz też użyć *Authentication → Users → Add user* z zaznaczonym *Auto Confirm User*.
+   Kolejne osoby dodajesz już w aplikacji: **Ustawienia → Dostęp do aplikacji** (rola `admin`, `editor` lub `viewer`). Taka osoba wchodzi na adres aplikacji i wybiera **Pierwsze logowanie**. Konto może założyć tylko e-mail z listy, a obcy dostanie odmowę (blokuje to sama baza). Usunięcie z listy od razu odcina dostęp.
+6. Skopiuj *Project URL* (przycisk **Connect** albo *Project Settings → Data API*) i klucz **publishable** (`sb_publishable_…`, dawniej „anon public”).
 7. Klucze podaj na jeden z dwóch sposobów:
    - **Na stałe w wersji online**: GitHub → repozytorium → *Settings → Secrets and variables → Actions → New repository secret*: `VITE_SUPABASE_URL` oraz `VITE_SUPABASE_ANON_KEY`. Potem uruchom wdrożenie ponownie (zakładka *Actions*).
    - **Tylko w jednej przeglądarce**: w aplikacji *Ustawienia → Baza danych → Połącz*.
 8. Pustą bazę możesz wypełnić danymi przykładowymi (*Ustawienia → Dane → Wgraj dane przykładowe*) albo od razu wpisać swoje linie i ludzi.
 
-> Klucz `anon` jest przeznaczony do przeglądarki. Sam w sobie nie daje dostępu do danych, bo baza wpuszcza tylko zalogowanych z listy `allowed_users`. **Klucza `service_role` nigdy nie wpisuj do aplikacji ani repozytorium.**
+> Klucz publishable jest przeznaczony do przeglądarki. Sam w sobie nie daje dostępu do danych, bo baza wpuszcza tylko zalogowanych z listy `allowed_users`. **Klucza `sb_secret_…` (dawniej `service_role`) nigdy nie wpisuj do aplikacji ani repozytorium.**
 
 ## Publikacja online
 

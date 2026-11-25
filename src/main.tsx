@@ -6,7 +6,7 @@ import Layout, { More } from './Layout';
 import Grafik from './pages/Grafik';
 import Historia from './pages/Historia';
 import Linie from './pages/Linie';
-import Login from './pages/Login';
+import Login, { SetPassword } from './pages/Login';
 import Matrix from './pages/Matrix';
 import Obsada from './pages/Obsada';
 import Pracownicy from './pages/Pracownicy';
@@ -15,7 +15,7 @@ import './index.css';
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <AppProvider login={(b) => <Login backend={b} />}>
+    <AppProvider login={(b) => <Login backend={b} />} recovery={(b, done) => <SetPassword backend={b} onDone={done} />}>
       <HashRouter>
         <Routes>
           <Route element={<Layout />}>
@@ -27,6 +27,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="historia" element={<Historia />} />
             <Route path="ustawienia" element={<Ustawienia />} />
             <Route path="wiecej" element={<More />} />
+            <Route path="*" element={<Obsada />} />
           </Route>
         </Routes>
       </HashRouter>

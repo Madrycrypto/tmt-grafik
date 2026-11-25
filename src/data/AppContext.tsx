@@ -32,7 +32,16 @@ export function useApp(): AppCtx {
   return c;
 }
 
-export function AppProvider({ children, login }: { children: ReactNode; login: (backend: Backend) => ReactNode }) {
+export function AppProvider({
+  children,
+  login,
+  recovery,
+}: {
+  children: ReactNode;
+  login: (backend: Backend) => ReactNode;
+  recovery: (backend: Backend, done: () => void) => ReactNode;
+}) {
+  const [recovering, setRecovering] = useState(false);
   const backend = useMemo<Backend>(() => {
     const cfg = readCloudConfig();
     return cfg ? cloudBackend(cfg) : demoBackend();
@@ -53,7 +62,10 @@ export function AppProvider({ children, login }: { children: ReactNode; login: (
       setSession(data.session);
       setAuthChecked(true);
     });
-    const { data } = backend.client.auth.onAuthStateChange((_e, s) => setSession(s));
+    const { data } = backend.client.auth.onAuthStateChange((event, s) => {
+      setSession(s);
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
+    });
     return () => data.subscription.unsubscribe();
   }, [backend]);
 
@@ -146,6 +158,7 @@ export function AppProvider({ children, login }: { children: ReactNode; login: (
 
   if (!authChecked) return <div className="splash">Łączenie z bazą…</div>;
   if (backend.mode === 'cloud' && !session) return <>{login(backend)}</>;
+  if (recovering) return <>{recovery(backend, () => setRecovering(false))}</>;
   if (backend.mode === 'cloud' && role === null)
     return (
       <div className="splash">

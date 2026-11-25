@@ -5,6 +5,7 @@ import { BRIGADES, OFF } from '../domain/types';
 import type { AppState, Pattern } from '../domain/types';
 import { normalize, readCloudConfig, resetDemo, writeCloudConfig } from '../data/backend';
 import { useApp } from '../data/AppContext';
+import Access from './Access';
 
 function Connection() {
   const { backend, user, role } = useApp();
@@ -211,6 +212,7 @@ export default function Ustawienia() {
         <h1>Ustawienia</h1>
       </div>
       <Connection />
+      <Access />
       <ShiftsAndPatterns />
       <Data />
     </>

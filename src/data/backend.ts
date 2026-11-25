@@ -25,6 +25,11 @@ export function readCloudConfig(): CloudConfig | null {
   return url && anonKey ? { url, anonKey } : null;
 }
 
+/** Adres aplikacji, na który wracają linki z e-maili (potwierdzenie, reset hasła). */
+export function appUrl(): string {
+  return location.origin + location.pathname;
+}
+
 export function writeCloudConfig(cfg: CloudConfig | null): void {
   if (cfg) localStorage.setItem(CONFIG_KEY, JSON.stringify(cfg));
   else localStorage.removeItem(CONFIG_KEY);
@@ -89,7 +94,8 @@ interface RecordRow {
 }
 
 export function cloudBackend(cfg: CloudConfig): Backend {
-  const client = createClient(cfg.url, cfg.anonKey);
+  // PKCE: linki z e-maili wracają jako ?code=…, co nie koliduje z routingiem po #
+  const client = createClient(cfg.url, cfg.anonKey, { auth: { flowType: 'pkce' } });
   return {
     mode: 'cloud',
     client,

@@ -88,3 +88,38 @@ end $$;
 
 -- Dodaj siebie (zmień e-mail) — bez tego nikt nie zobaczy danych:
 -- insert into public.allowed_users (email, role) values ('twoj.email@firma.pl', 'admin');
+
+-- ============================================================
+-- Zarządzanie dostępem z aplikacji (panel „Dostęp” dla admina)
+-- ============================================================
+
+-- Admin widzi i zmienia listę dostępu z aplikacji.
+drop policy if exists "admin czyta liste" on public.allowed_users;
+create policy "admin czyta liste" on public.allowed_users
+  for select to authenticated using (public.my_role() = 'admin');
+
+drop policy if exists "admin dodaje" on public.allowed_users;
+create policy "admin dodaje" on public.allowed_users
+  for insert to authenticated with check (public.my_role() = 'admin');
+
+drop policy if exists "admin zmienia" on public.allowed_users;
+create policy "admin zmienia" on public.allowed_users
+  for update to authenticated using (public.my_role() = 'admin') with check (public.my_role() = 'admin');
+
+drop policy if exists "admin usuwa" on public.allowed_users;
+create policy "admin usuwa" on public.allowed_users
+  for delete to authenticated using (public.my_role() = 'admin');
+
+-- Konto może założyć tylko e-mail z listy dostępu. Obcy dostanie błąd przy rejestracji.
+create or replace function public.check_allowed_signup() returns trigger
+language plpgsql security definer set search_path = public as $$
+begin
+  if not exists (select 1 from public.allowed_users where lower(email) = lower(new.email)) then
+    raise exception 'Adres % nie jest na liście dostępu TMT Grafik', new.email;
+  end if;
+  return new;
+end $$;
+
+drop trigger if exists tmt_check_allowed_signup on auth.users;
+create trigger tmt_check_allowed_signup before insert on auth.users
+for each row execute function public.check_allowed_signup();
