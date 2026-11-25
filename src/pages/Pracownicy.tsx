@@ -4,8 +4,10 @@ import { plannedShift, absenceOn } from '../domain/coverage';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { BRIGADES, REASON_LABEL, TYPE_LABEL } from '../domain/types';
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
+import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
 import { Icon, Sheet, TypeTag } from '../ui';
+import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 
 function emptyWorker(lineId: string, patternId: string): Worker {
   return { id: uid('w'), name: '', type: 'PL', patternId, brigade: 'A', lineId, homeStationId: null, active: true, skills: {} };
@@ -203,30 +205,79 @@ function WorkerAbsences({ worker }: { worker: Worker }) {
 }
 
 export default function Pracownicy() {
-  const { state } = useApp();
+  const { state, update } = useApp();
   const [editing, setEditing] = useState<Worker | null>(null);
   const [query, setQuery] = useState('');
   const [line, setLine] = useState('all');
   const [type, setType] = useState('all');
+  const [brig, setBrig] = useState('all');
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [sheet, setSheet] = useState<'import' | 'remove' | null>(null);
 
   const list = useMemo(
     () =>
       state.workers
-        .filter((w) => (line === 'all' || w.lineId === line) && (type === 'all' || w.type === type))
+        .filter((w) => (line === 'all' || w.lineId === line) && (type === 'all' || w.type === type) && (brig === 'all' || w.brigade === brig))
         .filter((w) => !query || w.name.toLowerCase().includes(query.toLowerCase()))
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
-    [state, query, line, type],
+    [state, query, line, type, brig],
   );
+  const chosen = state.workers.filter((w) => selected.has(w.id));
+  const allVisible = list.length > 0 && list.every((w) => selected.has(w.id));
+
+  const toggle = (id: string) => {
+    const next = new Set(selected);
+    if (next.has(id)) next.delete(id);
+    else next.add(id);
+    setSelected(next);
+  };
+  const toggleAll = () => setSelected(allVisible ? new Set() : new Set([...selected, ...list.map((w) => w.id)]));
+
+  const bulkSet = (patch: Partial<Worker>, text: string) => {
+    const ids = new Set(selected);
+    update((d) => {
+      for (const w of d.workers) {
+        if (!ids.has(w.id)) continue;
+        if (patch.lineId && patch.lineId !== w.lineId) w.homeStationId = null;
+        Object.assign(w, patch);
+      }
+    }, `${text} (${ids.size} os.)`);
+  };
 
   return (
     <>
       <div className="page-head">
         <div>
-          <div className="sub">{state.workers.filter((w) => w.active).length} aktywnych</div>
+          <div className="sub">{state.workers.filter((w) => w.active).length} aktywnych · {state.workers.length} łącznie</div>
           <h1>Pracownicy</h1>
         </div>
         <div className="row">
-          <label className="field">
+          <button
+            type="button"
+            className="btn primary"
+            disabled={!state.lines.length}
+            onClick={() => setEditing(emptyWorker(line !== 'all' ? line : state.lines[0].id, state.patterns[0]?.id ?? ''))}
+          >
+            <span style={{ width: 18, height: 18, display: 'inline-flex' }}>
+              <Icon name="plus" />
+            </span>
+            Dodaj
+          </button>
+          <button type="button" className="btn" onClick={() => setSheet('import')}>
+            Import listy
+          </button>
+          <button type="button" className="btn" onClick={() => downloadCsv(`pracownicy-${todayIso()}.csv`, workersCsv(state, list))}>
+            Eksport ({list.length})
+          </button>
+          <button type="button" className="btn" onClick={() => setSheet('remove')}>
+            Usuń listą
+          </button>
+        </div>
+      </div>
+
+      <section className="card">
+        <div className="row" style={{ marginBottom: 8 }}>
+          <label className="field grow" style={{ minWidth: 160 }}>
             Szukaj
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="nazwisko" />
           </label>
@@ -242,6 +293,15 @@ export default function Pracownicy() {
             </select>
           </label>
           <label className="field">
+            Brygada
+            <select value={brig} onChange={(e) => setBrig(e.target.value)}>
+              <option value="all">wszystkie</option>
+              {BRIGADES.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </select>
+          </label>
+          <label className="field">
             Typ
             <select value={type} onChange={(e) => setType(e.target.value)}>
               <option value="all">wszyscy</option>
@@ -252,41 +312,60 @@ export default function Pracownicy() {
               ))}
             </select>
           </label>
-          <button
-            type="button"
-            className="btn primary"
-            disabled={!state.lines.length}
-            onClick={() => setEditing(emptyWorker(line !== 'all' ? line : state.lines[0].id, state.patterns[0]?.id ?? ''))}
-          >
-            <span style={{ width: 18, height: 18, display: 'inline-flex' }}>
-              <Icon name="plus" />
-            </span>
-            Dodaj
-          </button>
         </div>
-      </div>
-      <section className="card">
-        {list.length === 0 && <div className="empty">Brak pracowników.</div>}
+
+        {selected.size > 0 && (
+          <div className="note" style={{ display: 'flex', flexWrap: 'wrap', gap: 8, alignItems: 'center', marginBottom: 8, background: 'var(--accent-soft)' }}>
+            <b style={{ color: 'var(--accent)' }}>Zaznaczono: {selected.size}</b>
+            <select className="input" aria-label="Zmień brygadę zaznaczonym" value="" onChange={(e) => e.target.value && bulkSet({ brigade: e.target.value as Worker['brigade'] }, `Zmiana brygady na ${e.target.value}`)}>
+              <option value="">Brygada →</option>
+              {BRIGADES.map((b) => (
+                <option key={b}>{b}</option>
+              ))}
+            </select>
+            <select className="input" aria-label="Przenieś zaznaczonych na linię" value="" onChange={(e) => e.target.value && bulkSet({ lineId: e.target.value }, `Przeniesienie na ${state.lines.find((l) => l.id === e.target.value)?.name}`)}>
+              <option value="">Linia →</option>
+              {state.lines.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+            <button type="button" className="btn small" onClick={() => bulkSet({ active: true }, 'Aktywowano')}>
+              Aktywuj
+            </button>
+            <BulkButtons small workers={chosen} update={update} onDone={() => setSelected(new Set())} />
+            <button type="button" className="btn small ghost" onClick={() => setSelected(new Set())}>
+              Odznacz
+            </button>
+          </div>
+        )}
+
+        {list.length === 0 ? (
+          <div className="empty">Brak pracowników. Dodaj ręcznie albo zaimportuj listę z Excela.</div>
+        ) : (
+          <label className="list-item sub" style={{ cursor: 'pointer' }}>
+            <input type="checkbox" checked={allVisible} onChange={toggleAll} style={{ width: 20, height: 20 }} />
+            zaznacz wszystkich widocznych ({list.length})
+          </label>
+        )}
         {list.map((w) => (
-          <button
-            key={w.id}
-            type="button"
-            className="list-item"
-            style={{ width: '100%', background: 'none', border: 0, borderBottom: '1px solid var(--line-soft)', textAlign: 'left', cursor: 'pointer', opacity: w.active ? 1 : 0.5 }}
-            onClick={() => setEditing(w)}
-          >
-            <span className="grow">
-              <b>{w.name}</b> <TypeTag w={w} />
+          <div key={w.id} className="list-item" style={{ opacity: w.active ? 1 : 0.55, flexWrap: 'nowrap' }}>
+            <input type="checkbox" aria-label={`Zaznacz ${w.name}`} checked={selected.has(w.id)} onChange={() => toggle(w.id)} style={{ width: 20, height: 20, flex: '0 0 20px' }} />
+            <button type="button" onClick={() => setEditing(w)} style={{ flex: 1, minWidth: 0, background: 'none', border: 0, textAlign: 'left', cursor: 'pointer', padding: 0 }}>
+              <b>{w.name}</b> <TypeTag w={w} /> {!w.active && <span className="tag">nieaktywny</span>}
               <div className="sub">
                 {state.lines.find((l) => l.id === w.lineId)?.name} · {state.stations.find((s) => s.id === w.homeStationId)?.name ?? 'rezerwa'} ·{' '}
-                {state.patterns.find((p) => p.id === w.patternId)?.name}
+                {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}
               </div>
-            </span>
+            </button>
             <span className="tag">Bryg. {w.brigade}</span>
-          </button>
+          </div>
         ))}
       </section>
       {editing && <WorkerForm initial={editing} onClose={() => setEditing(null)} />}
+      {sheet === 'import' && <ImportSheet onClose={() => setSheet(null)} />}
+      {sheet === 'remove' && <RemoveListSheet onClose={() => setSheet(null)} />}
     </>
   );
 }

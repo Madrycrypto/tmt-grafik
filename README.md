@@ -19,6 +19,12 @@ Aplikacja webowa (PWA) do planowania obsady linii produkcyjnych w ruchu ciągły
   - dodatkowa zmiana lub agencja, tylko z zachowaniem 11 h odpoczynku.
 
   Pokazuje też osoby „zablokowane”, czyli jedyne kwalifikowane na swoim stanowisku. Wariant zatwierdzasz jednym kliknięciem, a wpis trafia do historii.
+- **Lista pracowników**:
+  - dodawanie i edycja pojedynczych osób,
+  - **import z Excela (.xlsx), CSV albo wklejki z Excela** z podglądem przed zapisem (nowi, aktualizacje, wiersze z błędami); kolumny o nazwach stanowisk wczytują od razu poziomy matrycy,
+  - eksport do CSV w tym samym formacie, więc można wyeksportować, poprawić w Excelu i wczytać z powrotem,
+  - zaznaczanie wielu osób: zmiana brygady, przeniesienie na inną linię, dezaktywacja, usunięcie,
+  - **usuwanie listą**: wklej nazwiska albo wczytaj plik; aplikacja pokaże, kogo znalazła, a kogo nie ma w bazie.
 - **Synchronizacja na żywo** między telefonem a komputerem (Supabase Realtime).
 - **Bezpieczeństwo**: logowanie, token JWT przy każdym zapytaniu, lista dozwolonych e-maili z rolami `admin` / `editor` / `viewer`.
 
