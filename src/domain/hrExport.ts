@@ -1,4 +1,4 @@
-import { absenceOn, assignmentOn, plannedShift } from './coverage';
+import { absenceOn, placement, plannedShift } from './coverage';
 import { addDays, fmtHour, monthDays, weekday } from './dates';
 import { holidayName } from './holidays';
 import type { AppState, Worker } from './types';
@@ -23,6 +23,8 @@ export interface DayEntry {
   extra: boolean;
   absence?: string;
   stationId?: string | null;
+  /** stanowiska obsługiwane równocześnie z głównym */
+  alsoStationIds?: string[];
 }
 
 /** Pora nocna 22:00–06:00 (do ustalenia z kadrami; zmień w jednym miejscu). */
@@ -44,7 +46,7 @@ export function dayEntry(state: AppState, w: Worker, date: string): DayEntry {
   const night = NIGHT.reduce((s, [a, b]) => s + overlap(start, end, a, b), 0);
   const sunday = (weekday(date) === 0 ? overlap(start, end, 0, 24) : 0) + (weekday(addDays(date, 1)) === 0 ? overlap(start, end, 24, 48) : 0);
   const range = `${fmtHour(start).slice(0, 2)}-${fmtHour(end).slice(0, 2)}`;
-  const asg = assignmentOn(state, w.id, date);
+  const pl = placement(state, w, date);
   return {
     date,
     code: shift.extra ? `${range}*` : range,
@@ -54,7 +56,8 @@ export function dayEntry(state: AppState, w: Worker, date: string): DayEntry {
     night,
     sunday,
     extra: shift.extra,
-    stationId: asg ? asg.stationId : w.homeStationId,
+    stationId: pl.stationId,
+    ...(pl.also.length ? { alsoStationIds: pl.also } : {}),
   };
 }
 
@@ -92,8 +95,9 @@ export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
     for (const d of days) {
       if (d.absence) absences[d.absence] = (absences[d.absence] ?? 0) + 1;
       if (d.hours > 0) {
-        const k = d.stationId ?? '';
-        byStation[k] = (byStation[k] ?? 0) + d.hours;
+        // przy łączeniu stanowisk godziny zmiany dzielone są po równo
+        const keys = d.stationId ? [d.stationId, ...(d.alsoStationIds ?? [])] : [''];
+        for (const k of keys) byStation[k] = (byStation[k] ?? 0) + d.hours / keys.length;
       }
     }
     const sum = (k: 'hours' | 'night' | 'sunday') => days.reduce((s, d) => s + d[k], 0);
@@ -183,7 +187,7 @@ export function hrDailyCsv(state: AppState, f: HrFilter): string {
         s.worker.agency ?? '',
         lineOf(state, s.worker),
         s.worker.brigade,
-        d.absence ? '' : (state.stations.find((x) => x.id === d.stationId)?.name ?? 'rezerwa'),
+        d.absence ? '' : d.stationId ? [d.stationId, ...(d.alsoStationIds ?? [])].map((id) => state.stations.find((x) => x.id === id)?.name ?? '?').join(' + ') : 'rezerwa',
         d.start !== undefined ? fmtHour(d.start) : '',
         d.end !== undefined ? fmtHour(d.end) : '',
         d.hours,
@@ -214,7 +218,7 @@ export function hrStationsCsv(state: AppState, f: HrFilter): string {
         home,
         st?.name ?? 'rezerwa',
         st ? (state.lines.find((l) => l.id === st.lineId)?.name ?? '') : '',
-        h,
+        Math.round(h * 100) / 100,
         s.hours ? Math.round((h / s.hours) * 1000) / 10 : 0,
         s.hours,
       ]);

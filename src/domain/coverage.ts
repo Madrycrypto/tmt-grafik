@@ -50,10 +50,20 @@ export function stretch(start: number, hours: number, target?: number): [number,
 }
 
 /** Linia i stanowisko pracownika na zmianę zaczynającą się danego dnia. */
-export function placement(state: AppState, w: Worker, date: string): { lineId: string; stationId: string | null; moved: boolean } {
+export function placement(state: AppState, w: Worker, date: string): { lineId: string; stationId: string | null; moved: boolean; also: string[] } {
   const asg = assignmentOn(state, w.id, date);
-  if (asg) return { lineId: asg.lineId, stationId: asg.stationId, moved: asg.lineId !== w.lineId || asg.stationId !== w.homeStationId };
-  return { lineId: w.lineId, stationId: w.homeStationId, moved: false };
+  if (asg) {
+    const moved = asg.lineId !== w.lineId || asg.stationId !== w.homeStationId;
+    // stałe łączenie stanowisk obowiązuje tylko na własnym stanowisku
+    const also = asg.alsoStationIds ?? (moved ? [] : (w.alsoStationIds ?? []));
+    return { lineId: asg.lineId, stationId: asg.stationId, moved, also: asg.stationId ? also : [] };
+  }
+  return { lineId: w.lineId, stationId: w.homeStationId, moved: false, also: w.homeStationId ? (w.alsoStationIds ?? []) : [] };
+}
+
+/** Wszystkie stanowiska, które osoba obsługuje na tej zmianie (główne pierwsze). */
+export function servedStations(e: { stationId: string | null; also: string[] }): string[] {
+  return e.stationId ? [e.stationId, ...e.also.filter((x) => x !== e.stationId)] : [];
 }
 
 export interface RosterEntry {
@@ -64,6 +74,8 @@ export interface RosterEntry {
   lineId: string;
   stationId: string | null;
   moved: boolean;
+  /** dodatkowe stanowiska obsługiwane równocześnie */
+  also: string[];
   absence?: Absence;
 }
 
@@ -122,7 +134,7 @@ export function hoursOf(window: Interval): number[] {
 }
 
 export function stationStatus(st: Station, entries: RosterEntry[], window: Interval): StationStatus {
-  const people = entries.filter((e) => e.stationId === st.id);
+  const people = entries.filter((e) => e.stationId === st.id || e.also.includes(st.id));
   const perHour = hoursOf(window).map(
     (h) => people.filter((e) => !e.absence && qualified(e.worker, st) && e.rel.start <= h && h < e.rel.end).length,
   );
@@ -135,6 +147,6 @@ export function lineStatus(state: AppState, lineId: string, date: string, window
   const entries = roster(state, date, window, lineId);
   const stations = state.stations.filter((s) => s.lineId === lineId).sort((a, b) => a.order - b.order);
   const statuses = stations.map((st) => stationStatus(st, entries, window));
-  const reserve = entries.filter((e) => e.stationId === null || !stations.some((s) => s.id === e.stationId));
+  const reserve = entries.filter((e) => e.stationId === null || !stations.some((s) => s.id === e.stationId || e.also.includes(s.id)));
   return { entries, statuses, reserve };
 }

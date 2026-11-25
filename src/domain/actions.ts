@@ -16,14 +16,21 @@ export function setAssignment(state: AppState, a: Omit<Assignment, 'id'>): void 
   state.assignments = state.assignments.filter((x) => x !== old);
   // przesunięcie na inne stanowisko nie kasuje zmienionych godzin tego dnia
   const shift = a.shift ?? (a.extraShift ? undefined : old?.shift);
-  state.assignments.push({ ...a, ...(shift ? { shift } : {}), id: uid('as') });
+  const also = a.alsoStationIds ?? (old && old.stationId === a.stationId ? old.alsoStationIds : undefined);
+  state.assignments.push({ ...a, ...(shift ? { shift } : {}), ...(also ? { alsoStationIds: also } : {}), id: uid('as') });
+}
+
+/** Na ten dzień pracownik obsługuje (lub przestaje obsługiwać) dodatkowe stanowisko obok swojego. */
+export function setCombined(state: AppState, w: Worker, date: string, place: { lineId: string; stationId: string; also: string[] }, stationId: string, on: boolean): void {
+  const also = on ? [...new Set([...place.also, stationId])] : place.also.filter((x) => x !== stationId);
+  setAssignment(state, { date, workerId: w.id, lineId: place.lineId, stationId: place.stationId, alsoStationIds: also, source: 'manual' });
 }
 
 /** Ten dzień z inną długością zmiany (np. 12 h zamiast 8 h); null przywraca godziny z grafiku. */
 export function setDayHours(state: AppState, w: Worker, date: string, hours: number | null, base: { start: number; hours: number }, place: { lineId: string; stationId: string | null }): void {
   const old = state.assignments.find((x) => x.workerId === w.id && x.date === date);
   state.assignments = state.assignments.filter((x) => x !== old);
-  const moved = old && (old.stationId !== w.homeStationId || old.lineId !== w.lineId);
+  const moved = old && (old.stationId !== w.homeStationId || old.lineId !== w.lineId || old.alsoStationIds !== undefined);
   if (hours === null) {
     if (moved) state.assignments.push({ ...old!, shift: undefined, id: uid('as') });
     return;
@@ -36,6 +43,7 @@ export function setDayHours(state: AppState, w: Worker, date: string, hours: num
     lineId: place.lineId,
     stationId: place.stationId,
     shift: { start, hours: end - start },
+    ...(old?.alsoStationIds ? { alsoStationIds: old.alsoStationIds } : {}),
     source: old?.source ?? 'manual',
   });
 }
@@ -55,6 +63,7 @@ export function lineName(state: AppState, id: string): string {
 }
 
 export function describeStep(state: AppState, s: Variant['steps'][number]): string {
+  if (s.kind === 'combine') return `${s.worker.name}: ${stationName(state, s.fromStationId)} + ${stationName(state, s.toStationId)}`;
   const from = s.kind === 'extra' ? 'wolne (dodatkowa zmiana)' : stationName(state, s.fromStationId);
   const line = s.fromLineId !== s.toLineId ? ` [${lineName(state, s.fromLineId)} → ${lineName(state, s.toLineId)}]` : '';
   return `${s.worker.name}: ${from} → ${stationName(state, s.toStationId)}${line}`;
@@ -68,6 +77,10 @@ export function applyVariant(
 ): void {
   if (absent) addAbsence(state, absent.worker.id, absent.date, absent.reason);
   for (const s of v.steps) {
+    if (s.kind === 'combine' && s.fromStationId) {
+      setCombined(state, s.worker, s.shiftDate, { lineId: s.fromLineId, stationId: s.fromStationId, also: s.keepAlso ?? [] }, s.toStationId, true);
+      continue;
+    }
     setAssignment(state, {
       date: s.shiftDate,
       workerId: s.worker.id,

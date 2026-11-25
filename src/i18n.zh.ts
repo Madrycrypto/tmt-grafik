@@ -519,4 +519,15 @@ export const zh: Record<string, string> = {
   "w tym nocne 22–6": "其中夜间 22–6",
   "wg systemu zmianowego": "按班制",
   "Podgląd aplikacji pracownika": "预览员工应用",
+  // łączenie stanowisk
+  'łączy stanowiska': '兼顾工位',
+  'łączy z': '兼顾',
+  'Łączy z': '可兼顾',
+  'Jedna osoba może obsłużyć oba stanowiska naraz': '一人可同时操作两个工位',
+  'Usuń łączenie z {n}': '取消与 {n} 兼顾',
+  'Dodaj stanowisko łączone': '添加兼顾工位',
+  'Stale obsługuje też': '固定兼顾',
+  'Obsłuży też osoba z': '由此工位人员兼顾',
+  'Odłącz': '取消兼顾',
+  'Ta osoba przestaje obsługiwać to stanowisko w tym dniu': '当天此人不再兼顾该工位',
 };

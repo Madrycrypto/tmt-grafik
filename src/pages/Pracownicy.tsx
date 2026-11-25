@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
 import { plannedShift, absenceOn } from '../domain/coverage';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
-import { BRIGADES, REASON_LABEL, TYPE_LABEL, linePatterns, patternBrigades } from '../domain/types';
+import { BRIGADES, REASON_LABEL, TYPE_LABEL, canPair, linePatterns, patternBrigades } from '../domain/types';
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
@@ -156,6 +156,27 @@ function WorkerForm({
           <input type="email" value={w.email ?? ''} onChange={(e) => set('email', e.target.value)} placeholder="jan.kowalski@gmail.com" />
         </label>
       </div>
+      {w.homeStationId && stations.some((s) => canPair(state, w.homeStationId!, s.id)) && (
+        <div className="field">
+          {t('Stale obsługuje też')}
+          <div className="row" style={{ gap: 12 }}>
+            {stations.filter((s) => canPair(state, w.homeStationId!, s.id)).map((s) => (
+              <label key={s.id} className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
+                <input
+                  type="checkbox"
+                  checked={!!w.alsoStationIds?.includes(s.id)}
+                  onChange={(e) => {
+                    const list = (w.alsoStationIds ?? []).filter((x) => x !== s.id);
+                    if (e.target.checked) list.push(s.id);
+                    set('alsoStationIds', list.length ? list : undefined);
+                  }}
+                />
+                {s.name}
+              </label>
+            ))}
+          </div>
+        </div>
+      )}
       {w.shiftHours && (
         <div className="sub">{t('12 h w systemie 8 h: zmiana poranna 07–19, popołudniowa 11–23, nocna 19–07. Pojedynczy dzień zmienisz w Obsadzie przyciskiem „→ 12 h”.')}</div>
       )}

@@ -20,7 +20,7 @@ export interface SheetTarget {
   absent?: Worker;
 }
 
-const KIND_LABEL = { reserve: 'z rezerwy', surplus: 'z nadwyżki', move: 'przesunięcie', extra: 'dodatkowa zmiana' } as const;
+const KIND_LABEL = { reserve: 'z rezerwy', surplus: 'z nadwyżki', combine: 'łączy stanowiska', move: 'przesunięcie', extra: 'dodatkowa zmiana' } as const;
 
 function badge(v: Variant): string {
   const parts = [t(v.moves === 1 ? '{n} ruch' : '{n} ruchy', { n: v.moves })];
@@ -134,7 +134,7 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
             <div className="step" key={j}>
               <span className="n">{j + 1}</span>
               <span>
-                <b>{s.worker.name}</b> <TypeTag w={s.worker} /> — {s.kind === 'extra' ? t('wolne') : t(stationName(state, s.fromStationId))} → {stationName(state, s.toStationId)}
+                <b>{s.worker.name}</b> <TypeTag w={s.worker} /> — {s.kind === 'combine' ? `${stationName(state, s.fromStationId)} + ${stationName(state, s.toStationId)}` : <>{s.kind === 'extra' ? t('wolne') : t(stationName(state, s.fromStationId))} → {stationName(state, s.toStationId)}</>}
                 {s.fromLineId !== s.toLineId && ` (${t('z linii')} ${lineName(state, s.fromLineId)})`}
                 <br />
                 <span className="sub">

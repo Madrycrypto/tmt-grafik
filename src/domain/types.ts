@@ -58,6 +58,8 @@ export interface Station {
   /** minimalny poziom matrycy, który samodzielnie obsadza stanowisko */
   minLevel: number;
   order: number;
+  /** stanowiska, których operator może jednocześnie obsłużyć to stanowisko (np. OP50-2 dla OP51/52) */
+  pairWith?: string[];
 }
 
 export interface SkillEntry {
@@ -80,6 +82,8 @@ export interface Worker {
   email?: string;
   /** długość zmiany pracownika, gdy inna niż w systemie linii (np. 12 h w systemie 8 h) */
   shiftHours?: number;
+  /** stanowiska, które pracownik stale obsługuje razem ze swoim stanowiskiem */
+  alsoStationIds?: string[];
 }
 
 export type AbsenceReason = 'L4' | 'UW' | 'NN' | 'INNE';
@@ -105,6 +109,8 @@ export interface Assignment {
   extraShift?: { start: number; hours: number };
   /** zmiana w grafiku na ten dzień z innymi godzinami (np. 12 h zamiast 8 h) — nie jest dodatkową zmianą */
   shift?: { start: number; hours: number };
+  /** stanowiska obsługiwane tego dnia równocześnie ze stanowiskiem głównym; [] = żadne */
+  alsoStationIds?: string[];
   source: 'manual' | 'replacement';
 }
 
@@ -159,6 +165,14 @@ export function linePatterns(state: AppState, lineId: string): Pattern[] {
   const line = state.lines.find((l) => l.id === lineId);
   const ids = line?.patternIds;
   return ids?.length ? state.patterns.filter((p) => ids.includes(p.id)) : state.patterns;
+}
+
+/** Czy stanowiska mogą być obsłużone przez jedną osobę (relacja symetryczna). */
+export function canPair(state: AppState, a: string, b: string): boolean {
+  if (a === b) return false;
+  const sa = state.stations.find((s) => s.id === a);
+  const sb = state.stations.find((s) => s.id === b);
+  return !!sa && !!sb && (!!sa.pairWith?.includes(b) || !!sb.pairWith?.includes(a));
 }
 
 export const COLLECTIONS = [

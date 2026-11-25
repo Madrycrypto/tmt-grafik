@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { uid } from '../domain/actions';
 import { patternBrigades } from '../domain/types';
+import { canPair } from '../domain/types';
 import type { Station } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { t } from '../i18n';
@@ -61,6 +62,20 @@ function LineCard({ lineId }: { lineId: string }) {
       if (s) Object.assign(s, p);
     });
 
+  const pair = (a: string, b: string, on: boolean) => {
+    const na = stations.find((x) => x.id === a)?.name;
+    const nb = stations.find((x) => x.id === b)?.name;
+    update((d) => {
+      for (const st of d.stations) {
+        if (st.id !== a && st.id !== b) continue;
+        const other = st.id === a ? b : a;
+        const list = (st.pairWith ?? []).filter((x) => x !== other);
+        if (on && st.id === a) list.push(other);
+        st.pairWith = list.length ? list : undefined;
+      }
+    }, on ? `Stanowiska łączone: ${na} + ${nb}` : `Koniec łączenia: ${na} + ${nb}`);
+  };
+
   const addStation = () => {
     const n = name.trim();
     if (!n) return;
@@ -76,9 +91,12 @@ function LineCard({ lineId }: { lineId: string }) {
       d.stations = d.stations.filter((x) => x.id !== s.id);
       for (const w of d.workers) {
         if (w.homeStationId === s.id) w.homeStationId = null;
+        if (w.alsoStationIds) w.alsoStationIds = w.alsoStationIds.filter((x) => x !== s.id);
         delete w.skills[s.id];
       }
       d.assignments = d.assignments.filter((a) => a.stationId !== s.id);
+      for (const a of d.assignments) if (a.alsoStationIds) a.alsoStationIds = a.alsoStationIds.filter((x) => x !== s.id);
+      for (const o of d.stations) if (o.pairWith) o.pairWith = o.pairWith.filter((x) => x !== s.id);
     }, `${line.name}: usunięto stanowisko ${s.name}`);
   };
 
@@ -204,6 +222,7 @@ function LineCard({ lineId }: { lineId: string }) {
               <th>{t('Stanowisko')}</th>
               <th style={{ width: 120 }}>{t('Ludzi na godz.')}</th>
               <th style={{ width: 150 }}>{t('Min. poziom')}</th>
+              <th title={t('Jedna osoba może obsłużyć oba stanowiska naraz')}>{t('Łączy z')}</th>
               <th style={{ width: 170 }} />
             </tr>
           </thead>
@@ -225,6 +244,22 @@ function LineCard({ lineId }: { lineId: string }) {
                       </option>
                     ))}
                   </select>
+                </td>
+                <td>
+                  <div className="row" style={{ gap: 4, alignItems: 'center' }}>
+                    {stations.filter((o) => canPair(state, s.id, o.id)).map((o) => (
+                      <span key={o.id} className="tag">
+                        {o.name}{' '}
+                        <button type="button" className="btn small ghost" style={{ padding: '0 4px' }} aria-label={t('Usuń łączenie z {n}', { n: o.name })} onClick={() => pair(s.id, o.id, false)}>×</button>
+                      </span>
+                    ))}
+                    <select className="input" aria-label={t('Dodaj stanowisko łączone')} value="" onChange={(e) => e.target.value && pair(s.id, e.target.value, true)}>
+                      <option value="">+</option>
+                      {stations.filter((o) => o.id !== s.id && !canPair(state, s.id, o.id)).map((o) => (
+                        <option key={o.id} value={o.id}>{o.name}</option>
+                      ))}
+                    </select>
+                  </div>
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
                   <button type="button" className="btn small ghost" aria-label={t('W górę')} disabled={i === 0} onClick={() => move(s, -1)}>↑</button>

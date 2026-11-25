@@ -14,6 +14,7 @@ interface DayInfo {
   key: string;
   shift?: { start: number; end: number };
   station?: string | null;
+  also?: string[];
   absence?: string;
 }
 
@@ -22,15 +23,17 @@ function dayInfo(state: AppState, w: Worker, date: string): DayInfo {
   if (ab) return { key: `A:${ab.reason}`, absence: ab.reason };
   const s = plannedShift(state, w, date);
   if (!s) return { key: 'W' };
-  const st = placement(state, w, date).stationId;
-  return { key: `${s.start}-${s.end}@${st ?? ''}`, shift: { start: s.start, end: s.end }, station: st };
+  const pl = placement(state, w, date);
+  const st = pl.stationId;
+  return { key: `${s.start}-${s.end}@${[st ?? '', ...pl.also].join('+')}`, shift: { start: s.start, end: s.end }, station: st, also: pl.also };
 }
 
 function describe(l: Lang, state: AppState, d: DayInfo): string {
   if (d.absence) return tl(l, d.absence === 'UW' ? 'Urlop' : d.absence === 'L4' ? 'L4' : 'Inne');
   if (!d.shift) return tl(l, 'wolne');
   const range = `${fmtHour(d.shift.start).slice(0, 2)}–${fmtHour(d.shift.end).slice(0, 2)}`;
-  const st = d.station ? state.stations.find((x) => x.id === d.station)?.name : undefined;
+  const name = (id: string) => state.stations.find((x) => x.id === id)?.name ?? '?';
+  const st = d.station ? [d.station, ...(d.also ?? [])].map(name).join(' + ') : undefined;
   return st ? `${range} ${st}` : range;
 }
 

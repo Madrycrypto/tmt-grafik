@@ -1,10 +1,10 @@
 import { useMemo, useState } from 'react';
-import { setAssignment, setDayHours, stationName } from '../domain/actions';
+import { setAssignment, setCombined, setDayHours, stationName } from '../domain/actions';
 import { lineStatus, level } from '../domain/coverage';
 import { shiftDef } from '../domain/rota';
 import type { RosterEntry, StationStatus } from '../domain/coverage';
 import { addDays, fmtDate, fmtHour, fmtRange, todayIso } from '../domain/dates';
-import { OFF, REASON_LABEL, linePatterns } from '../domain/types';
+import { OFF, REASON_LABEL, canPair, linePatterns } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
@@ -16,8 +16,10 @@ function deficitWindow(s: StationStatus, start: number): { start: number; end: n
   return { start: start + low[0], end: start + low[low.length - 1] + 1 };
 }
 
-function PersonRow({ e, onAbsent, onUndo, onHours }: { e: RosterEntry; onAbsent: () => void; onUndo: () => void; onHours?: () => void }) {
-  const lv = e.stationId ? level(e.worker, e.stationId) : 0;
+function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine }: { e: RosterEntry; at?: string; names?: (id: string) => string; onAbsent: () => void; onUndo: () => void; onHours?: () => void; onUncombine?: () => void }) {
+  const here = at ?? e.stationId;
+  const lv = here ? level(e.worker, here) : 0;
+  const others = [e.stationId, ...e.also].filter((x): x is string => !!x && x !== here);
   const len = e.shift.end - e.shift.start;
   return (
     <div className="person">
@@ -28,9 +30,10 @@ function PersonRow({ e, onAbsent, onUndo, onHours }: { e: RosterEntry; onAbsent:
           {fmtRange(e.shift.start, e.shift.end - e.shift.start)} · {t('bryg.')} {e.worker.brigade}
           {e.shift.extra && ` · ${t('dodatkowa zmiana')}`}
           {e.moved && !e.shift.extra && ` · ${t('przesunięty')}`}
+          {others.length > 0 && names && ` · ${t('łączy z')} ${others.map(names).join(', ')}`}
         </div>
       </div>
-      {e.stationId && <Level value={lv} />}
+      {here && <Level value={lv} />}
       {e.absence ? (
         <>
           <span className="tag red">{t(REASON_LABEL[e.absence.reason])}</span>
@@ -47,9 +50,15 @@ function PersonRow({ e, onAbsent, onUndo, onHours }: { e: RosterEntry; onAbsent:
               {len === 12 ? '→ 8 h' : '→ 12 h'}
             </button>
           )}
-          <button type="button" className="btn small" onClick={onAbsent}>
-            {t('Brak')}
-          </button>
+          {onUncombine ? (
+            <button type="button" className="btn small" title={t('Ta osoba przestaje obsługiwać to stanowisko w tym dniu')} onClick={onUncombine}>
+              {t('Odłącz')}
+            </button>
+          ) : (
+            <button type="button" className="btn small" onClick={onAbsent}>
+              {t('Brak')}
+            </button>
+          )}
         </>
       )}
     </div>
@@ -109,6 +118,21 @@ export default function Obsada() {
         `${e.worker.name}: ${e.shift.date} ${target} h`,
       );
   };
+
+  const names = (id: string) => stationName(state, id);
+
+  const combine = (e: RosterEntry, stationId: string, on: boolean) => {
+    if (!e.stationId) return;
+    const place = { lineId: e.lineId, stationId: e.stationId, also: e.also };
+    update(
+      (d) => setCombined(d, d.workers.find((w) => w.id === e.worker.id)!, e.shift.date, place, stationId, on),
+      on ? `${e.worker.name}: ${names(e.stationId)} + ${names(stationId)} (${e.shift.date})` : `${e.worker.name}: koniec łączenia z ${names(stationId)} (${e.shift.date})`,
+    );
+  };
+
+  /** osoby z sąsiednich stanowisk, które mogą też obsłużyć to stanowisko */
+  const pairCandidates = (s: StationStatus) =>
+    present.filter((e) => e.stationId && e.stationId !== s.station.id && !e.also.includes(s.station.id) && canPair(state, e.stationId, s.station.id) && level(e.worker, s.station.id) >= s.station.minLevel);
 
   const fillGap = (s: StationStatus) => setTarget({ date, lineId, stationId: s.station.id, window: deficitWindow(s, window.start) });
 
@@ -218,9 +242,34 @@ export default function Obsada() {
               </div>
               {hourCells(s)}
               {s.people.length === 0 && <div className="sub">{t('Nikt nie jest zaplanowany.')}</div>}
-              {s.people.map((e) => (
-                <PersonRow key={e.worker.id + e.shift.date} e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} onHours={toggleHours(e)} />
-              ))}
+              {s.people.map((e) => {
+                const guest = e.stationId !== s.station.id;
+                return (
+                  <PersonRow
+                    key={e.worker.id + e.shift.date}
+                    e={e}
+                    at={s.station.id}
+                    names={names}
+                    onAbsent={() => openAbsent(e)}
+                    onUndo={() => undoAbsence(e)}
+                    onHours={toggleHours(e)}
+                    onUncombine={guest ? () => combine(e, s.station.id, false) : undefined}
+                  />
+                );
+              })}
+              {pairCandidates(s).length > 0 && (
+                <label className="field">
+                  {t('Obsłuży też osoba z')}
+                  <select value="" onChange={(ev) => { const e = pairCandidates(s).find((x) => x.worker.id === ev.target.value); if (e) combine(e, s.station.id, true); }}>
+                    <option value="">{t('— wybierz —')}</option>
+                    {pairCandidates(s).map((e) => (
+                      <option key={e.worker.id} value={e.worker.id}>
+                        {names(e.stationId!)}: {e.worker.name} ({t('poz.')} {level(e.worker, s.station.id)})
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              )}
               {!s.ok && (
                 <button type="button" className="btn danger" onClick={() => fillGap(s)}>
                   {t('Znajdź zastępstwo')}

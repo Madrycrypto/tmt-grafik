@@ -2,9 +2,11 @@ import { addDays } from './dates';
 import { absenceOn, covers, plannedShift, qualified, level, roster } from './coverage';
 import type { Interval, RosterEntry } from './coverage';
 import { t } from '../i18n';
+import { canPair } from './types';
 import type { AppState, Station, Worker } from './types';
 
-export type StepKind = 'reserve' | 'surplus' | 'move' | 'extra';
+/** combine = pracownik zostaje na swoim stanowisku i obsługuje też brakujące */
+export type StepKind = 'reserve' | 'surplus' | 'combine' | 'move' | 'extra';
 
 export interface Step {
   worker: Worker;
@@ -16,6 +18,8 @@ export interface Step {
   level: number;
   /** dzień rozpoczęcia zmiany, na którą robimy przypisanie */
   shiftDate: string;
+  /** dla combine: stanowiska, które pracownik już obsługuje razem z głównym */
+  keepAlso?: string[];
   extraShift?: { start: number; hours: number };
   warnings: string[];
 }
@@ -50,7 +54,7 @@ const MAX_DEPTH = 3;
 const MAX_VARIANTS = 3;
 
 function stepCost(s: Step): number {
-  const base = { reserve: 0, surplus: 1, move: 3, extra: s.worker.type === 'AG' ? 25 : 20 }[s.kind];
+  const base = { reserve: 0, surplus: 1, combine: 2, move: 3, extra: s.worker.type === 'AG' ? 25 : 20 }[s.kind];
   const otherLine = s.fromLineId !== s.toLineId ? 4 : 0;
   return base + otherLine - s.level * 0.25;
 }
@@ -97,7 +101,7 @@ function stillCoveredWithout(ctx: Ctx, e: RosterEntry, used: Set<string>, window
       o.worker.id !== e.worker.id &&
       !used.has(o.worker.id) &&
       o.lineId === e.lineId &&
-      o.stationId === st.id &&
+      (o.stationId === st.id || o.also.includes(st.id)) &&
       qualified(o.worker, st) &&
       covers(o.rel, window),
   ).length;
@@ -112,7 +116,23 @@ function fill(ctx: Ctx, stationId: string, lineId: string, window: Interval, use
   for (const e of ctx.present) {
     const w = e.worker;
     if (used.has(w.id) || !qualified(w, st) || !covers(e.rel, window)) continue;
-    if (e.stationId === stationId && e.lineId === lineId) continue;
+    if ((e.stationId === stationId || e.also.includes(stationId)) && e.lineId === lineId) continue;
+    if (e.stationId && e.lineId === lineId && canPair(ctx.state, e.stationId, stationId)) {
+      chains.push([
+        {
+          worker: w,
+          kind: 'combine',
+          fromLineId: e.lineId,
+          fromStationId: e.stationId,
+          toLineId: lineId,
+          toStationId: stationId,
+          level: level(w, stationId),
+          shiftDate: e.shift.date,
+          keepAlso: e.also,
+          warnings: [],
+        },
+      ]);
+    }
     const fromStation = e.stationId && ctx.stations.has(e.stationId) ? e.stationId : null;
     const step: Step = {
       worker: w,

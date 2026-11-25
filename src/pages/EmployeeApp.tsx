@@ -182,7 +182,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
                     {next.date === today ? t('Dziś') : next.date === addDays(today, 1) ? t('Jutro') : fmtDate(next.date)} · {shiftText(next.code.replace('*', ''))}
                   </div>
                   <div style={{ color: '#c9d3e6', marginTop: 2 }}>
-                    {stationName(next.stationId)}
+                    {[next.stationId, ...(next.alsoStationIds ?? [])].map((x) => stationName(x ?? null)).join(' + ')}
                     {next.extra ? ` · ${t('dodatkowa zmiana')}` : ''}
                   </div>
                 </>
@@ -221,7 +221,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
                     <span style={{ width: 64, flex: '0 0 64px', fontWeight: 600, color: weekday(d) === 0 || hol ? 'var(--red-ink)' : undefined }}>{fmtDate(d)}</span>
                     <span className="grow" style={{ minWidth: 0 }}>
                       <b style={{ color: work ? undefined : e.absence ? 'var(--red-ink)' : 'var(--muted)' }}>{shiftText(e.code.replace('*', ''))}</b>
-                      {work && <span className="sub"> · {stationName(e.stationId)}</span>}
+                      {work && <span className="sub"> · {[e.stationId, ...(e.alsoStationIds ?? [])].map((x) => stationName(x ?? null)).join(' + ')}</span>}
                       {e.extra && <span className="tag amber" style={{ marginLeft: 6 }}>{t('dodatkowa zmiana')}</span>}
                       {hol && <div className="sub">{t(hol)}</div>}
                     </span>
@@ -263,7 +263,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
                   .map(([id, h]) => (
                     <div key={id} className="list-item">
                       <span className="grow">{stationName(id || null)}</span>
-                      <b>{h} h</b>
+                      <b>{Math.round(h * 10) / 10} h</b>
                     </div>
                   ))}
                 <div className="sub">{t('Godziny według grafiku. Ostateczne rozliczenie robią kadry.')}</div>
