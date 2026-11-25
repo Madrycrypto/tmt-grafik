@@ -1,3 +1,5 @@
+import { t } from '../i18n';
+
 const DAY_MS = 86_400_000;
 
 function toUtc(d: string): number {
@@ -48,7 +50,7 @@ export function fmtRange(start: number, hours: number): string {
 
 export function fmtDate(d: string): string {
   const [, m, day] = d.split('-');
-  return `${WEEKDAY_SHORT[weekday(d)]} ${day}.${m}`;
+  return `${t(WEEKDAY_SHORT[weekday(d)])} ${day}.${m}`;
 }
 
 export function mod(n: number, m: number): number {

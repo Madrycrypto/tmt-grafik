@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useApp } from '../data/AppContext';
+import { t } from '../i18n';
 
 export default function Historia() {
   const { state } = useApp();
@@ -9,16 +10,16 @@ export default function Historia() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">Kto, kiedy i co zmienił</div>
-          <h1>Historia zmian</h1>
+          <div className="sub">{t('Kto, kiedy i co zmienił')}</div>
+          <h1>{t('Historia zmian')}</h1>
         </div>
         <label className="field">
-          Szukaj
-          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="nazwisko, stanowisko…" />
+          {t('Szukaj')}
+          <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('nazwisko, stanowisko…')} />
         </label>
       </div>
       <section className="card">
-        {list.length === 0 && <div className="empty">Brak wpisów.</div>}
+        {list.length === 0 && <div className="empty">{t('Brak wpisów.')}</div>}
         {list.slice(0, 300).map((h) => (
           <div key={h.id} className="list-item" style={{ alignItems: 'flex-start' }}>
             <div className="sub" style={{ width: 150, flex: '0 0 150px' }}>

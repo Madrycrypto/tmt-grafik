@@ -1,6 +1,7 @@
 import { addDays } from './dates';
 import { absenceOn, covers, plannedShift, qualified, level, roster } from './coverage';
 import type { Interval, RosterEntry } from './coverage';
+import { t } from '../i18n';
 import type { AppState, Station, Worker } from './types';
 
 export type StepKind = 'reserve' | 'surplus' | 'move' | 'extra';
@@ -133,7 +134,7 @@ function fill(ctx: Ctx, stationId: string, lineId: string, window: Interval, use
       // przesunięty pracownik zostawia puste stanowisko na całą swoją zmianę
       const subs = fill(ctx, fromStation, e.lineId, e.rel, next, depth - 1);
       if (subs.length === 0 && depth === MAX_DEPTH) {
-        ctx.blocked.push({ worker: w, stationId: fromStation, reason: 'brak zastępcy na jego stanowisku' });
+        ctx.blocked.push({ worker: w, stationId: fromStation, reason: t('brak zastępcy na jego stanowisku') });
       }
       for (const sub of subs) chains.push([{ ...step, kind: 'move' }, ...sub]);
     }
@@ -147,7 +148,7 @@ function fill(ctx: Ctx, stationId: string, lineId: string, window: Interval, use
     if (!rest.ok) continue;
     const hours = window.end - window.start;
     const warnings: string[] = [];
-    if (hours > usualHours(ctx.state, w)) warnings.push(`zmiana ${hours} h dla pracownika ${usualHours(ctx.state, w)} h`);
+    if (hours > usualHours(ctx.state, w)) warnings.push(t('zmiana {h} h dla pracownika {u} h', { h: hours, u: usualHours(ctx.state, w) }));
     const shift = window.start < 0 ? -1 : window.start >= 24 ? 1 : 0;
     chains.push([
       {

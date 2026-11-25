@@ -9,6 +9,7 @@ import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
 import { usePersistent } from '../ui';
 import HrExportSheet from './HrExport';
+import { t } from '../i18n';
 
 const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
 
@@ -18,7 +19,7 @@ export default function Grafik() {
   const [patternId, setPatternId] = usePersistent('pattern', state.patterns[0]?.id ?? '');
   const pattern = state.patterns.find((p) => p.id === patternId) ?? state.patterns[0];
   const days = monthDays(month);
-  const label = (code: string) => (code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
+  const label = (code: string) => t(code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
   const colorOf = (code: string) => {
     const d = state.shiftDefs.find((x) => x.code === code);
     return d ? `c-${d.label}${d.hours}` : 'c-W';
@@ -37,7 +38,7 @@ export default function Grafik() {
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
   const [hr, setHr] = useState(false);
 
-  if (!pattern) return <div className="card empty">Brak zdefiniowanych wzorców zmian (Ustawienia).</div>;
+  if (!pattern) return <div className="card empty">{t('Brak zdefiniowanych wzorców zmian (Ustawienia).')}</div>;
   const codes = patternShiftCodes(pattern);
 
   const cycle = (b: BrigadeId, c: RotaCell) => {
@@ -71,12 +72,12 @@ export default function Grafik() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">{patternBrigades(pattern).length} {patternBrigades(pattern).length === 1 ? 'brygada' : 'brygady'} · kliknij komórkę, aby zmienić zmianę ręcznie</div>
-          <h1>Grafik brygad</h1>
+          <div className="sub">{t('Brygady: {n}', { n: patternBrigades(pattern).join(', ') })} · {t('kliknij komórkę, aby zmienić zmianę ręcznie')}</div>
+          <h1>{t('Grafik brygad')}</h1>
         </div>
         <div className="row">
           <label className="field">
-            Wzorzec
+            {t('Wzorzec')}
             <select value={pattern.id} onChange={(e) => setPatternId(e.target.value)}>
               {state.patterns.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -87,11 +88,11 @@ export default function Grafik() {
             </select>
           </label>
           <label className="field">
-            Miesiąc
+            {t('Miesiąc')}
             <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
           </label>
           <button type="button" className="btn primary" onClick={() => setHr(true)}>
-            Eksport dla kadr
+            {t('Eksport dla kadr')}
           </button>
         </div>
       </div>
@@ -102,15 +103,15 @@ export default function Grafik() {
           <table style={{ minWidth: 40 * days.length + 220, tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th className="sticky-col" style={{ width: 96 }}>Brygada</th>
+                <th className="sticky-col" style={{ width: 96 }}>{t('Brygada')}</th>
                 {days.map((d) => (
                   <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 || holidayName(d) ? 'var(--red-ink)' : undefined }}>
-                    {WEEKDAY_SHORT[weekday(d)]}
+                    {t(WEEKDAY_SHORT[weekday(d)])}
                     <br />
                     {d.slice(8)}
                   </th>
                 ))}
-                <th style={{ width: 120, textAlign: 'center' }}>Dni / cel · godz.</th>
+                <th style={{ width: 120, textAlign: 'center' }}>{t('Dni / cel · godz.')}</th>
               </tr>
             </thead>
             <tbody>
@@ -121,7 +122,7 @@ export default function Grafik() {
                     <td className="sticky-col" style={{ fontWeight: 700 }}>
                       <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
                       {b}
-                      <div className="sub" style={{ fontWeight: 400 }} title="pracownicy w tym systemie na wszystkich liniach">{membersOf(b)} os.</div>
+                      <div className="sub" style={{ fontWeight: 400 }} title={t('pracownicy w tym systemie na wszystkich liniach')}>{membersOf(b)} os.</div>
                     </td>
                     {cells.map((c) => {
                       const cls =
@@ -136,18 +137,18 @@ export default function Grafik() {
                                 : colorOf(c.code);
                       const title =
                         c.status === 'holiday'
-                          ? `święto: ${holidayName(c.date)}`
+                          ? `${t('święto')}: ${t(holidayName(c.date) ?? '')}`
                           : c.status === 'excluded'
-                          ? 'wyłączone (kalendarz zakładu)'
+                          ? t('wyłączone (kalendarz zakładu)')
                           : c.status === 'trimmed'
-                            ? 'dodatkowe wolne (cel dni)'
+                            ? t('dodatkowe wolne (cel dni)')
                             : c.overridden
-                              ? 'zmienione ręcznie'
+                              ? t('zmienione ręcznie')
                               : '';
                       return (
                         <td key={c.date} style={{ padding: '4px 2px' }}>
                           <button type="button" className={`cell ${cls} ${c.overridden ? 'c-ov' : ''}`} title={`${c.date} ${label(c.code)} ${title}`} onClick={() => cycle(b, c)}>
-                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? 'w' : c.status === 'holiday' ? 'Ś' : label(c.code)}
+                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? t('w') : c.status === 'holiday' ? t('Ś') : label(c.code)}
                           </button>
                         </td>
                       );
@@ -160,11 +161,11 @@ export default function Grafik() {
                 );
               })}
               <tr>
-                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }}>Luki</td>
+                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }}>{t('Luki')}</td>
                 {days.map((d) => {
                   const g = gapsOnDay(state, pattern.id, d);
                   return (
-                    <td key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--red-ink)', padding: '4px 2px' }} title={g.length ? 'Brak brygady na zmianie — obsadź 12 h, agencją lub nadgodzinami' : ''}>
+                    <td key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--red-ink)', padding: '4px 2px' }} title={g.length ? t('Brak brygady na zmianie — obsadź 12 h, agencją lub nadgodzinami') : ''}>
                       {g.map(label).join(' ')}
                     </td>
                   );
@@ -184,26 +185,26 @@ export default function Grafik() {
               </span>
             );
           })}
-          <span><span className="cell c-W">W</span>wolne</span>
-          <span><span className="cell c-trimmed">w</span>dodatkowe wolne (cel dni)</span>
-          <span><span className="cell c-excluded">✕</span>wyłączone</span>
-          <span><span className="cell c-holiday">Ś</span>święto ustawowe{holidaysOff(pattern) ? '' : ' (ten system pracuje w święta)'}</span>
-          <span><span className="cell c-W c-ov">R</span>zmiana ręczna</span>
+          <span><span className="cell c-W">{t('W')}</span>{t('wolne')}</span>
+          <span><span className="cell c-trimmed">{t('w')}</span>{t('dodatkowe wolne (cel dni)')}</span>
+          <span><span className="cell c-excluded">✕</span>{t('wyłączone')}</span>
+          <span><span className="cell c-holiday">{t('Ś')}</span>{t('święto ustawowe')}{holidaysOff(pattern) ? '' : ` (${t('ten system pracuje w święta')})`}</span>
+          <span><span className="cell c-W c-ov">{t('R')}</span>{t('zmiana ręczna')}</span>
         </div>
       </section>
 
       <div className="split">
         <section className="card main-col">
           <div className="card-head">
-            <h2>Docelowa liczba dni pracy — {month}</h2>
+            <h2>{t('Docelowa liczba dni pracy')} — {month}</h2>
           </div>
           <p className="sub" style={{ marginTop: 0 }}>
-            Generator zostawia każdej brygadzie dokładnie tyle dni, nadwyżkę zamienia na wolne rozłożone równomiernie. Puste pole = pełny cykl.
+            {t('Generator zostawia każdej brygadzie dokładnie tyle dni, nadwyżkę zamienia na wolne rozłożone równomiernie. Puste pole = pełny cykl.')}
           </p>
           <div className="row">
             <label className="field" style={{ width: 120 }}>
-              Wszystkie
-              <input type="number" min={0} max={31} placeholder="np. 20" onBlur={(e) => e.target.value && setTarget('all', e.target.value)} />
+              {t('Wszystkie')}
+              <input type="number" min={0} max={31} placeholder={t('np. 20')} onBlur={(e) => e.target.value && setTarget('all', e.target.value)} />
             </label>
             {patternBrigades(pattern).map((b) => (
               <label key={b} className="field" style={{ width: 90 }}>
@@ -214,15 +215,15 @@ export default function Grafik() {
           </div>
           {summary.some((s) => s.target !== undefined && s.days < s.target) && (
             <div className="note amber" style={{ marginTop: 10 }}>
-              Cykl daje mniej dni niż cel dla brygad: {summary.filter((s) => s.target !== undefined && s.days < s.target).map((s) => `${s.brigade} (${s.days}/${s.target})`).join(', ')}. Dodaj zmiany ręcznie, klikając w komórki.
+              {t('Cykl daje mniej dni niż cel dla brygad:')} {summary.filter((s) => s.target !== undefined && s.days < s.target).map((s) => `${s.brigade} (${s.days}/${s.target})`).join(', ')}. {t('Dodaj zmiany ręcznie, klikając w komórki.')}
             </div>
           )}
           {summary.some((s) => s.weeksWithoutRest.length) && (
             <div className="note" style={{ marginTop: 10 }}>
-              Tygodnie z odpoczynkiem krótszym niż 35 h (Kodeks pracy dopuszcza 24 h przy zmianie zmiany, art. 133 § 2):{' '}
+              {t('Tygodnie z odpoczynkiem krótszym niż 35 h (Kodeks pracy dopuszcza 24 h przy zmianie zmiany, art. 133 § 2):')}{' '}
               {summary
                 .filter((s) => s.weeksWithoutRest.length)
-                .map((s) => `${s.brigade}: ${s.weeksWithoutRest.map((w) => `od ${w.week.slice(8)}.${w.week.slice(5, 7)} (${w.rest} h)`).join(', ')}`)
+                .map((s) => `${s.brigade}: ${s.weeksWithoutRest.map((w) => `${t('od')} ${w.week.slice(8)}.${w.week.slice(5, 7)} (${w.rest} h)`).join(', ')}`)
                 .join(' · ')}
             </div>
           )}
@@ -242,10 +243,10 @@ function Exclusions() {
   const [note, setNote] = useState('');
 
   const describe = (e: Exclusion) =>
-    `${e.kind === 'weekly' ? `Co tydzień: ${WEEKDAY_LONG[e.weekday ?? 0]}` : `Dzień ${e.date}`} — ${e.shiftCodes
+    `${e.kind === 'weekly' ? `${t('Co tydzień')}: ${t(WEEKDAY_LONG[e.weekday ?? 0])}` : `${t('Dzień')} ${e.date}`} — ${e.shiftCodes
       .map((c) => {
         const d = state.shiftDefs.find((s) => s.code === c);
-        return d ? `${d.label} ${fmtRange(d.start, d.hours)}` : c;
+        return d ? `${t(d.label)} ${fmtRange(d.start, d.hours)}` : c;
       })
       .join(', ')}`;
 
@@ -262,14 +263,14 @@ function Exclusions() {
   return (
     <section className="card side-col">
       <div className="card-head">
-        <h2>Kalendarz zakładu — wyłączenia</h2>
+        <h2>{t('Kalendarz zakładu — wyłączenia')}</h2>
       </div>
-      {state.exclusions.length === 0 && <div className="sub">Brak wyłączeń.</div>}
+      {state.exclusions.length === 0 && <div className="sub">{t('Brak wyłączeń.')}</div>}
       {state.exclusions.map((e) => (
         <div key={e.id} className="list-item">
           <div className="grow">
             <div style={{ fontWeight: 600, fontSize: 14 }}>{describe(e)}</div>
-            {e.note && <div className="sub">{e.note}</div>}
+            {e.note && <div className="sub">{t(e.note)}</div>}
           </div>
           <button
             type="button"
@@ -280,38 +281,38 @@ function Exclusions() {
               }, `Usunięto wyłączenie: ${describe(e)}`)
             }
           >
-            Usuń
+            {t('Usuń')}
           </button>
         </div>
       ))}
       <div className="stack" style={{ marginTop: 12 }}>
         <div className="row">
           <label className="field">
-            Rodzaj
+            {t('Rodzaj')}
             <select value={kind} onChange={(e) => setKind(e.target.value as 'weekly' | 'date')}>
-              <option value="weekly">co tydzień</option>
-              <option value="date">konkretny dzień</option>
+              <option value="weekly">{t('co tydzień')}</option>
+              <option value="date">{t('konkretny dzień')}</option>
             </select>
           </label>
           {kind === 'weekly' ? (
             <label className="field">
-              Dzień tygodnia
+              {t('Dzień tygodnia')}
               <select value={wd} onChange={(e) => setWd(Number(e.target.value))}>
                 {[1, 2, 3, 4, 5, 6, 0].map((i) => (
                   <option key={i} value={i}>
-                    {WEEKDAY_LONG[i]}
+                    {t(WEEKDAY_LONG[i])}
                   </option>
                 ))}
               </select>
             </label>
           ) : (
             <label className="field">
-              Data
+              {t('Data')}
               <input type="date" value={date} onChange={(e) => setDate(e.target.value)} />
             </label>
           )}
         </div>
-        <div className="row" role="group" aria-label="Zmiany do wyłączenia">
+        <div className="row" role="group" aria-label={t('Zmiany do wyłączenia')}>
           {state.shiftDefs.map((s) => (
             <label key={s.code} className="tag" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '6px 10px', fontSize: 12 }}>
               <input
@@ -319,16 +320,16 @@ function Exclusions() {
                 checked={codes.includes(s.code)}
                 onChange={(e) => setCodes(e.target.checked ? [...codes, s.code] : codes.filter((c) => c !== s.code))}
               />
-              {s.label} {fmtRange(s.start, s.hours)}
+              {t(s.label)} {fmtRange(s.start, s.hours)}
             </label>
           ))}
         </div>
         <label className="field">
           Opis (opcjonalnie)
-          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="np. postój planowy, święto" />
+          <input value={note} onChange={(e) => setNote(e.target.value)} placeholder={t('np. postój planowy, święto')} />
         </label>
         <button type="button" className="btn primary" disabled={!codes.length} onClick={add}>
-          Dodaj wyłączenie
+          {t('Dodaj wyłączenie')}
         </button>
       </div>
     </section>

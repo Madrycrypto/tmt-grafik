@@ -4,6 +4,7 @@ import type { Cell, ImportItem } from '../domain/workerImport';
 import type { Worker } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Sheet } from '../ui';
+import { t } from '../i18n';
 
 export function downloadCsv(name: string, csv: string): void {
   const a = document.createElement('a');
@@ -57,7 +58,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
     try {
       setRows(await readFileRows(f));
     } catch (e) {
-      setReadError(`Nie udało się odczytać pliku: ${e instanceof Error ? e.message : String(e)}`);
+      setReadError(t('Nie udało się odczytać pliku: {msg}', { msg: e instanceof Error ? e.message : String(e) }));
     }
   };
 
@@ -67,49 +68,48 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Sheet title="Import listy pracowników" sub="Excel (.xlsx), CSV albo wklejka z Excela. Pierwszy wiersz to nagłówki." onClose={onClose}>
+    <Sheet title={t('Import listy pracowników')} sub={t('Excel (.xlsx), CSV albo wklejka z Excela. Pierwszy wiersz to nagłówki.')} onClose={onClose}>
       <div className="note">
-        Kolumny: <b>Imię i nazwisko</b>, Typ (PL / CN / Agencja), Agencja, System (8h / 12h), <b>Brygada</b> (A–D), <b>Linia</b>, Stanowisko, Aktywny (tak/nie). Dodatkowe kolumny o nazwach
-        stanowisk (np. „Lutowanie”) wczytują poziomy matrycy 0–4. Kolejność kolumn dowolna.
+        {t('Kolumny: Imię i nazwisko, Typ (PL / CN / Agencja), Agencja, System (8h / 12h), Brygada (A–D), Linia, Stanowisko, Aktywny (tak/nie). Dodatkowe kolumny o nazwach stanowisk (np. „Lutowanie”) wczytują poziomy matrycy 0–4. Kolejność kolumn dowolna. Nagłówki kolumn wpisuj po polsku.')}
       </div>
       <div className="row">
         <label className="btn primary">
-          Wybierz plik
+          {t('Wybierz plik')}
           <input type="file" accept=".xlsx,.csv,.txt,text/csv" hidden onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </label>
         <button type="button" className="btn" onClick={template}>
-          Pobierz wzór (CSV)
+          {t('Pobierz wzór (CSV)')}
         </button>
         {fileName && <span className="sub">{fileName}</span>}
       </div>
       <details>
-        <summary style={{ cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>…albo wklej z Excela</summary>
-        <textarea className="input" style={{ width: '100%', height: 120, padding: 8, marginTop: 8 }} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder="Zaznacz w Excelu tabelę z nagłówkami, Ctrl+C, wklej tutaj" />
+        <summary style={{ cursor: 'pointer', fontSize: 14, fontWeight: 600 }}>{t('…albo wklej z Excela')}</summary>
+        <textarea className="input" style={{ width: '100%', height: 120, padding: 8, marginTop: 8 }} value={paste} onChange={(e) => setPaste(e.target.value)} placeholder={t('Zaznacz w Excelu tabelę z nagłówkami, Ctrl+C, wklej tutaj')} />
         <button type="button" className="btn" disabled={!paste.trim()} onClick={() => { setFileName('wklejka'); setRows(parseDelimited(paste)); }}>
-          Sprawdź wklejone
+          {t('Sprawdź wklejone')}
         </button>
       </details>
       <label className="sub" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
         <input type="checkbox" checked={updateExisting} onChange={(e) => setUpdateExisting(e.target.checked)} />
-        aktualizuj istniejących (dopasowanie po imieniu i nazwisku)
+        {t('aktualizuj istniejących (dopasowanie po imieniu i nazwisku)')}
       </label>
       {readError && <div className="note red">{readError}</div>}
       {plan?.problem && <div className="note red">{plan.problem}</div>}
       {plan && !plan.problem && (
         <>
           <div className="row">
-            <span className="tag green">nowi: {count('new')}</span>
-            <span className="tag blue">aktualizacje: {count('update')}</span>
-            <span className="tag red">pominięte: {count('error')}</span>
+            <span className="tag green">{t('nowi')}: {count('new')}</span>
+            <span className="tag blue">{t('aktualizacje')}: {count('update')}</span>
+            <span className="tag red">{t('pominięte')}: {count('error')}</span>
           </div>
           <div className="scroll-x" style={{ maxHeight: 300, overflowY: 'auto' }}>
             <table style={{ minWidth: 520 }}>
               <thead>
                 <tr>
-                  <th>Wiersz</th>
-                  <th>Pracownik</th>
-                  <th>Wynik</th>
-                  <th>Uwagi</th>
+                  <th>{t('Wiersz')}</th>
+                  <th>{t('Pracownik')}</th>
+                  <th>{t('Wynik')}</th>
+                  <th>{t('Uwagi')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -120,14 +120,14 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
                       <b>{it.name || '—'}</b>
                       {it.worker && (
                         <div className="sub">
-                          {state.lines.find((l) => l.id === it.worker!.lineId)?.name} · bryg. {it.worker.brigade} ·{' '}
-                          {state.stations.find((s) => s.id === it.worker!.homeStationId)?.name ?? 'rezerwa'}
-                          {it.skills ? ` · ${it.skills} poz. matrycy` : ''}
+                          {state.lines.find((l) => l.id === it.worker!.lineId)?.name} · {t('bryg.')} {it.worker.brigade} ·{' '}
+                          {state.stations.find((s) => s.id === it.worker!.homeStationId)?.name ?? t('rezerwa')}
+                          {it.skills ? ` · ${it.skills} ${t('poz. matrycy')}` : ''}
                         </div>
                       )}
                     </td>
                     <td>
-                      <span className={`tag ${ACTION_TAG[it.action][0]}`}>{ACTION_TAG[it.action][1]}</span>
+                      <span className={`tag ${ACTION_TAG[it.action][0]}`}>{t(ACTION_TAG[it.action][1])}</span>
                     </td>
                     <td className="sub">{[...it.errors, ...it.warnings].join('; ')}</td>
                   </tr>
@@ -136,7 +136,7 @@ export function ImportSheet({ onClose }: { onClose: () => void }) {
             </table>
           </div>
           <button type="button" className="btn success" disabled={!ok.length} onClick={run}>
-            Importuj {ok.length} {osob(ok.length)}
+            {t('Importuj')} {ok.length} {t(osob(ok.length))}
           </button>
         </>
       )}
@@ -155,10 +155,10 @@ export function RemoveListSheet({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Sheet title="Usuń lub dezaktywuj listą" sub="Wklej nazwiska (jedno w wierszu) albo wczytaj plik — liczy się pierwsza kolumna." onClose={onClose}>
+    <Sheet title={t('Usuń lub dezaktywuj listą')} sub={t('Wklej nazwiska (jedno w wierszu) albo wczytaj plik — liczy się pierwsza kolumna.')} onClose={onClose}>
       <div className="row">
         <label className="btn">
-          Wczytaj plik (.xlsx / .csv)
+          {t('Wczytaj plik (.xlsx / .csv)')}
           <input type="file" accept=".xlsx,.csv,.txt,text/csv" hidden onChange={(e) => e.target.files?.[0] && void onFile(e.target.files[0])} />
         </label>
       </div>
@@ -166,10 +166,10 @@ export function RemoveListSheet({ onClose }: { onClose: () => void }) {
       {result && (
         <>
           <div className="row">
-            <span className="tag green">znaleziono: {result.found.length}</span>
-            {result.missing.length > 0 && <span className="tag red">nie znaleziono: {result.missing.length}</span>}
+            <span className="tag green">{t('znaleziono')}: {result.found.length}</span>
+            {result.missing.length > 0 && <span className="tag red">{t('nie znaleziono')}: {result.missing.length}</span>}
           </div>
-          {result.missing.length > 0 && <div className="note amber">Nie ma w bazie: {result.missing.join(', ')}</div>}
+          {result.missing.length > 0 && <div className="note amber">{t('Nie ma w bazie:')} {result.missing.join(', ')}</div>}
           <div className="sub">{result.found.map((w) => w.name).join(', ')}</div>
           <BulkButtons workers={result.found} onDone={onClose} update={update} />
         </>
@@ -196,19 +196,19 @@ export function BulkButtons({ workers, onDone, update, small }: { workers: Worke
           onDone();
         }}
       >
-        Oznacz nieaktywnych ({n})
+        {t('Oznacz nieaktywnych')} ({n})
       </button>
       <button
         type="button"
         className={'btn danger' + sz}
         disabled={!n}
         onClick={() => {
-          if (!confirm(`Trwale usunąć ${n} os. razem z matrycą, nieobecnościami i przypisaniami?\n\n${names(10)}`)) return;
+          if (!confirm(t('Trwale usunąć {n} os. razem z matrycą, nieobecnościami i przypisaniami?', { n }) + `\n\n${names(10)}`)) return;
           update((d) => removeWorkers(d, ids), `Usunięto ${n} os.: ${names()}`);
           onDone();
         }}
       >
-        Usuń ({n})
+        {t('Usuń')} ({n})
       </button>
     </div>
   );

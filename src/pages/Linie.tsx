@@ -3,6 +3,7 @@ import { uid } from '../domain/actions';
 import { patternBrigades } from '../domain/types';
 import type { Station } from '../domain/types';
 import { useApp } from '../data/AppContext';
+import { t } from '../i18n';
 
 export default function Linie() {
   const { state, update } = useApp();
@@ -21,20 +22,20 @@ export default function Linie() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">Aplikacja jest uniwersalna: dodaj dowolne linie i stanowiska</div>
-          <h1>Linie i stanowiska</h1>
+          <div className="sub">{t('Aplikacja jest uniwersalna: dodaj dowolne linie i stanowiska')}</div>
+          <h1>{t('Linie i stanowiska')}</h1>
         </div>
         <div className="row">
           <label className="field">
-            Nowa linia
-            <input value={newLine} onChange={(e) => setNewLine(e.target.value)} placeholder="np. CFM 2" onKeyDown={(e) => e.key === 'Enter' && addLine()} />
+            {t('Nowa linia')}
+            <input value={newLine} onChange={(e) => setNewLine(e.target.value)} placeholder={t('np. CFM 2')} onKeyDown={(e) => e.key === 'Enter' && addLine()} />
           </label>
           <button type="button" className="btn primary" disabled={!newLine.trim()} onClick={addLine}>
-            Dodaj linię
+            {t('Dodaj linię')}
           </button>
         </div>
       </div>
-      {state.lines.length === 0 && <div className="card empty">Brak linii. Dodaj pierwszą powyżej.</div>}
+      {state.lines.length === 0 && <div className="card empty">{t('Brak linii. Dodaj pierwszą powyżej.')}</div>}
       {state.lines.map((l) => (
         <LineCard key={l.id} lineId={l.id} />
       ))}
@@ -65,7 +66,7 @@ function LineCard({ lineId }: { lineId: string }) {
   };
 
   const removeStation = (s: Station) => {
-    if (!confirm(`Usunąć stanowisko „${s.name}”? Osoby z tym stanowiskiem macierzystym trafią do rezerwy.`)) return;
+    if (!confirm(t('Usunąć stanowisko „{name}”? Osoby z tym stanowiskiem macierzystym trafią do rezerwy.', { name: s.name }))) return;
     update((d) => {
       d.stations = d.stations.filter((x) => x.id !== s.id);
       for (const w of d.workers) {
@@ -92,9 +93,9 @@ function LineCard({ lineId }: { lineId: string }) {
     const brig = patternBrigades(p);
     const moved = state.workers.filter((w) => w.lineId === lineId && !brig.includes(w.brigade));
     const msg = moved.length
-      ? `\n\n${moved.length} os. jest w brygadach, których ten system nie ma (${[...new Set(moved.map((w) => w.brigade))].join(', ')}) — trafią do brygady ${brig[0]}.`
+      ? '\n\n' + t('{n} os. jest w brygadach, których ten system nie ma ({list}) — trafią do brygady {b}.', { n: moved.length, list: [...new Set(moved.map((w) => w.brigade))].join(', '), b: brig[0] })
       : '';
-    if (!confirm(`Przełączyć ${line.name} (${crew} os.) na „${p.name}”?${msg}`)) return;
+    if (!confirm(t('Przełączyć {line} ({n} os.) na „{system}”?', { line: line.name, n: crew, system: p.name }) + msg)) return;
     update((d) => {
       d.lines.find((x) => x.id === lineId)!.patternIds = [patternId];
       for (const w of d.workers) {
@@ -106,8 +107,8 @@ function LineCard({ lineId }: { lineId: string }) {
   };
 
   const removeLine = () => {
-    if (crew > 0) return alert(`Na linii jest ${crew} aktywnych pracowników. Najpierw przenieś ich na inną linię.`);
-    if (!confirm(`Usunąć linię ${line.name} i jej stanowiska?`)) return;
+    if (crew > 0) return alert(t('Na linii jest {n} aktywnych pracowników. Najpierw przenieś ich na inną linię.', { n: crew }));
+    if (!confirm(t('Usunąć linię {name} i jej stanowiska?', { name: line.name }))) return;
     update((d) => {
       d.lines = d.lines.filter((x) => x.id !== lineId);
       d.stations = d.stations.filter((x) => x.lineId !== lineId);
@@ -121,7 +122,7 @@ function LineCard({ lineId }: { lineId: string }) {
           <input
             className="input"
             style={{ fontWeight: 700, fontSize: 16, width: 200 }}
-            aria-label="Nazwa linii"
+            aria-label={t('Nazwa linii')}
             defaultValue={line.name}
             onBlur={(e) =>
               e.target.value.trim() &&
@@ -131,14 +132,14 @@ function LineCard({ lineId }: { lineId: string }) {
               }, `Zmiana nazwy linii: ${line.name} → ${e.target.value.trim()}`)
             }
           />
-          <span className="sub">{crew} pracowników</span>
+          <span className="sub">{t('{n} pracowników', { n: crew })}</span>
         </div>
         <button type="button" className="btn small" onClick={removeLine}>
-          Usuń linię
+          {t('Usuń linię')}
         </button>
       </div>
       <div className="stack" style={{ marginBottom: 12 }}>
-        <div className="sub">System zmianowy linii (można zaznaczyć kilka, np. 8 h i 12 h na tej samej linii):</div>
+        <div className="sub">{t('System zmianowy linii (można zaznaczyć kilka, np. 8 h i 12 h na tej samej linii):')}</div>
         <div className="row">
           {state.patterns.map((p) => {
             const on = !line.patternIds?.length || line.patternIds.includes(p.id);
@@ -162,9 +163,9 @@ function LineCard({ lineId }: { lineId: string }) {
         </div>
         <div className="row" style={{ alignItems: 'flex-end' }}>
           <label className="field">
-            Przełącz całą linię na system
+            {t('Przełącz całą linię na system')}
             <select value="" onChange={(e) => e.target.value && switchSystem(e.target.value)}>
-              <option value="">— wybierz —</option>
+              <option value="">{t('— wybierz —')}</option>
               {state.patterns.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
@@ -173,7 +174,7 @@ function LineCard({ lineId }: { lineId: string }) {
             </select>
           </label>
           <span className="sub" style={{ paddingBottom: 10 }}>
-            Ustawia system linii i przenosi do niego wszystkich jej pracowników. Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.
+            {t('Ustawia system linii i przenosi do niego wszystkich jej pracowników. Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.')}
           </span>
         </div>
       </div>
@@ -181,9 +182,9 @@ function LineCard({ lineId }: { lineId: string }) {
         <table style={{ minWidth: 560 }}>
           <thead>
             <tr>
-              <th>Stanowisko</th>
-              <th style={{ width: 120 }}>Ludzi na godz.</th>
-              <th style={{ width: 150 }}>Min. poziom</th>
+              <th>{t('Stanowisko')}</th>
+              <th style={{ width: 120 }}>{t('Ludzi na godz.')}</th>
+              <th style={{ width: 150 }}>{t('Min. poziom')}</th>
               <th style={{ width: 170 }} />
             </tr>
           </thead>
@@ -191,25 +192,25 @@ function LineCard({ lineId }: { lineId: string }) {
             {stations.map((s, i) => (
               <tr key={s.id}>
                 <td>
-                  <input className="input" style={{ width: '100%' }} aria-label="Nazwa stanowiska" defaultValue={s.name} onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && patch(s.id, { name: e.target.value.trim() })} />
+                  <input className="input" style={{ width: '100%' }} aria-label={t('Nazwa stanowiska')} defaultValue={s.name} onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && patch(s.id, { name: e.target.value.trim() })} />
                 </td>
                 <td>
-                  <input className="input" type="number" min={1} max={20} style={{ width: 80 }} aria-label="Wymagana liczba osób" value={s.required} onChange={(e) => patch(s.id, { required: Math.max(1, Number(e.target.value) || 1) })} />
+                  <input className="input" type="number" min={1} max={20} style={{ width: 80 }} aria-label={t('Wymagana liczba osób')} value={s.required} onChange={(e) => patch(s.id, { required: Math.max(1, Number(e.target.value) || 1) })} />
                 </td>
                 <td>
-                  <select className="input" aria-label="Minimalny poziom" value={s.minLevel} onChange={(e) => patch(s.id, { minLevel: Number(e.target.value) })}>
+                  <select className="input" aria-label={t('Minimalny poziom')} value={s.minLevel} onChange={(e) => patch(s.id, { minLevel: Number(e.target.value) })}>
                     {[1, 2, 3, 4].map((l) => (
                       <option key={l} value={l}>
                         {l}
-                        {l === 3 ? ' (standard)' : ''}
+                        {l === 3 ? ` (${t('standard')})` : ''}
                       </option>
                     ))}
                   </select>
                 </td>
                 <td style={{ whiteSpace: 'nowrap' }}>
-                  <button type="button" className="btn small ghost" aria-label="W górę" disabled={i === 0} onClick={() => move(s, -1)}>↑</button>
-                  <button type="button" className="btn small ghost" aria-label="W dół" disabled={i === stations.length - 1} onClick={() => move(s, 1)}>↓</button>
-                  <button type="button" className="btn small" onClick={() => removeStation(s)}>Usuń</button>
+                  <button type="button" className="btn small ghost" aria-label={t('W górę')} disabled={i === 0} onClick={() => move(s, -1)}>↑</button>
+                  <button type="button" className="btn small ghost" aria-label={t('W dół')} disabled={i === stations.length - 1} onClick={() => move(s, 1)}>↓</button>
+                  <button type="button" className="btn small" onClick={() => removeStation(s)}>{t('Usuń')}</button>
                 </td>
               </tr>
             ))}
@@ -217,9 +218,9 @@ function LineCard({ lineId }: { lineId: string }) {
         </table>
       </div>
       <div className="row" style={{ marginTop: 10 }}>
-        <input className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder="Nowe stanowisko" aria-label="Nowe stanowisko" onKeyDown={(e) => e.key === 'Enter' && addStation()} />
+        <input className="input grow" value={name} onChange={(e) => setName(e.target.value)} placeholder={t('Nowe stanowisko')} aria-label={t('Nowe stanowisko')} onKeyDown={(e) => e.key === 'Enter' && addStation()} />
         <button type="button" className="btn" disabled={!name.trim()} onClick={addStation}>
-          Dodaj stanowisko
+          {t('Dodaj stanowisko')}
         </button>
       </div>
     </section>

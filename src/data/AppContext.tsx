@@ -5,6 +5,7 @@ import { log } from '../domain/actions';
 import type { AppState } from '../domain/types';
 import { applyRemote, cloudBackend, demoBackend, readCloudConfig } from './backend';
 import type { Backend } from './backend';
+import { t } from '../i18n';
 
 type SyncStatus = 'idle' | 'saving' | 'error';
 export type Role = 'admin' | 'editor' | 'viewer';
@@ -73,7 +74,7 @@ export function AppProvider({
     if (!backend.client || !session) return;
     setRole(undefined);
     void backend.client.rpc('my_role').then(({ data, error }) => {
-      if (error) setLoadError(`Nie można sprawdzić uprawnień: ${error.message}. Czy uruchomiono supabase/schema.sql?`);
+      if (error) setLoadError(t('Nie można sprawdzić uprawnień: {msg}. Czy uruchomiono supabase/schema.sql?', { msg: error.message }));
       else setRole((data as Role | null) ?? null);
     });
   }, [backend, session]);
@@ -132,7 +133,7 @@ export function AppProvider({
       const prev = stateRef.current;
       if (!prev) return;
       if (!canEdit) {
-        alert('Masz dostęp tylko do podglądu (rola: viewer).');
+        alert(t('Masz dostęp tylko do podglądu (rola: viewer).'));
         return;
       }
       const draft = structuredClone(prev);
@@ -156,30 +157,30 @@ export function AppProvider({
     [persist],
   );
 
-  if (!authChecked) return <div className="splash">Łączenie z bazą…</div>;
+  if (!authChecked) return <div className="splash">{t('Łączenie z bazą…')}</div>;
   if (backend.mode === 'cloud' && !session) return <>{login(backend)}</>;
   if (recovering) return <>{recovery(backend, () => setRecovering(false))}</>;
   if (backend.mode === 'cloud' && role === null)
     return (
       <div className="splash">
-        <h2>Brak dostępu</h2>
-        <p>Konto {session?.user.email} nie jest na liście osób z dostępem. Poproś administratora o dodanie.</p>
+        <h2>{t('Brak dostępu')}</h2>
+        <p>{t('Konto {email} nie jest na liście osób z dostępem. Poproś administratora o dodanie.', { email: session?.user.email ?? '' })}</p>
         <button className="btn" type="button" onClick={() => void backend.client?.auth.signOut()}>
-          Wyloguj
+          {t('Wyloguj')}
         </button>
       </div>
     );
-  if (backend.mode === 'cloud' && role === undefined && !loadError) return <div className="splash">Sprawdzanie uprawnień…</div>;
+  if (backend.mode === 'cloud' && role === undefined && !loadError) return <div className="splash">{t('Sprawdzanie uprawnień…')}</div>;
   if (loadError)
     return (
       <div className="splash">
-        <p>Nie udało się wczytać danych: {loadError}</p>
+        <p>{t('Nie udało się wczytać danych: {msg}', { msg: loadError })}</p>
         <button className="btn primary" type="button" onClick={() => void reload()}>
-          Spróbuj ponownie
+          {t('Spróbuj ponownie')}
         </button>
       </div>
     );
-  if (!state) return <div className="splash">Wczytywanie…</div>;
+  if (!state) return <div className="splash">{t('Wczytywanie…')}</div>;
 
   return (
     <Ctx.Provider value={{ state, backend, user, session, role: role ?? 'viewer', canEdit, sync, syncError, update, replaceAll, reload }}>

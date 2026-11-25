@@ -6,6 +6,7 @@ import { TYPE_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Sheet } from '../ui';
 import { downloadCsv } from './WorkerBulk';
+import { t } from '../i18n';
 
 export default function HrExportSheet({ onClose, month: initialMonth }: { onClose: () => void; month?: string }) {
   const { state } = useApp();
@@ -24,16 +25,16 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
   };
 
   return (
-    <Sheet title="Eksport dla kadr" sub="Nazwisko i zmiana na każdy dzień według grafiku, z nieobecnościami i sumami godzin. Plik otwiera się w Excelu." onClose={onClose}>
+    <Sheet title={t('Eksport dla kadr')} sub={t('Nazwisko i zmiana na każdy dzień według grafiku, z nieobecnościami i sumami godzin. Plik otwiera się w Excelu.')} onClose={onClose}>
       <div className="row">
         <label className="field">
-          Miesiąc
+          {t('Miesiąc')}
           <input type="month" value={f.month} onChange={(e) => e.target.value && setF({ ...f, month: e.target.value })} />
         </label>
         <label className="field">
-          Linia
+          {t('Linia')}
           <select value={f.lineId} onChange={(e) => setF({ ...f, lineId: e.target.value })}>
-            <option value="all">wszystkie</option>
+            <option value="all">{t('wszystkie')}</option>
             {state.lines.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -42,12 +43,12 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
           </select>
         </label>
         <label className="field">
-          Pracownicy
+          {t('Pracownicy')}
           <select value={f.who} onChange={(e) => setF({ ...f, who: e.target.value })}>
-            <option value="all">wszyscy</option>
+            <option value="all">{t('wszyscy')}</option>
             {Object.entries(TYPE_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
             {agencies.map((a) => (
@@ -58,41 +59,41 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
           </select>
         </label>
       </div>
-      <div className="row" role="radiogroup" aria-label="Format">
+      <div className="row" role="radiogroup" aria-label={t('Format')}>
         <label className="tag" style={{ padding: '8px 12px', fontSize: 13, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <input type="radio" checked={format === 'monthly'} onChange={() => setFormat('monthly')} />
-          Tabela miesięczna (osoba × dzień)
+          {t('Tabela miesięczna (osoba × dzień)')}
         </label>
         <label className="tag" style={{ padding: '8px 12px', fontSize: 13, display: 'inline-flex', gap: 6, alignItems: 'center' }}>
           <input type="radio" checked={format === 'daily'} onChange={() => setFormat('daily')} />
-          Lista dzienna (wiersz na dzień)
+          {t('Lista dzienna (wiersz na dzień)')}
         </label>
       </div>
       <label className="sub" style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
         <input type="checkbox" checked={f.includeInactive} onChange={(e) => setF({ ...f, includeInactive: e.target.checked })} />
-        uwzględnij nieaktywnych
+        {t('uwzględnij nieaktywnych')}
       </label>
 
       <div className="row">
-        <span className="tag">{summary.length} os.</span>
+        <span className="tag">{summary.length} {t('os.')}</span>
         <span className="tag">{total('hours')} h</span>
-        <span className="tag">nocne {total('night')} h</span>
-        <span className="tag">niedziela {total('sunday')} h</span>
-        <span className="tag amber">dodatkowe {total('extraHours')} h</span>
+        <span className="tag">{t('nocne')} {total('night')} h</span>
+        <span className="tag">{t('niedziela')} {total('sunday')} h</span>
+        <span className="tag amber">{t('dodatkowe')} {total('extraHours')} h</span>
       </div>
 
       <div className="scroll-x" style={{ maxHeight: 280, overflowY: 'auto' }}>
         <table style={{ minWidth: 220 + 7 * 64, fontSize: 12 }}>
           <thead>
             <tr>
-              <th className="sticky-col">Nazwisko</th>
+              <th className="sticky-col">{t('Nazwisko')}</th>
               {days.slice(0, 7).map((d) => (
                 <th key={d} style={{ textAlign: 'center' }}>
-                  {WEEKDAY_SHORT[weekday(d)]} {d.slice(8)}
+                  {t(WEEKDAY_SHORT[weekday(d)])} {d.slice(8)}
                 </th>
               ))}
               <th>…</th>
-              <th>Godz.</th>
+              <th>{t('Godz.')}</th>
             </tr>
           </thead>
           <tbody>
@@ -111,12 +112,12 @@ export default function HrExportSheet({ onClose, month: initialMonth }: { onClos
           </tbody>
         </table>
       </div>
-      {summary.length > 12 && <div className="sub">Podgląd pokazuje 12 osób i pierwszy tydzień; plik zawiera wszystkich i cały miesiąc.</div>}
+      {summary.length > 12 && <div className="sub">{t('Podgląd pokazuje 12 osób i pierwszy tydzień; plik zawiera wszystkich i cały miesiąc.')}</div>}
       <div className="note">
-        07-15 = zmiana od 7:00 do 15:00 · * = dodatkowa zmiana poza grafikiem · W = wolne · L4 / UW / NN = nieobecności. Godziny nocne liczone dla pory 22:00–6:00.
+        {t('07-15 = zmiana od 7:00 do 15:00 · * = dodatkowa zmiana poza grafikiem · W = wolne · L4 / UW / NN = nieobecności. Godziny nocne liczone dla pory 22:00–6:00.')}
       </div>
       <button type="button" className="btn success" disabled={!summary.length} onClick={download}>
-        Pobierz plik dla kadr
+        {t('Pobierz plik dla kadr')}
       </button>
     </Sheet>
   );

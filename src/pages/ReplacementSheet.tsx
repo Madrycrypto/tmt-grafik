@@ -9,6 +9,7 @@ import type { AbsenceReason, Worker } from '../domain/types';
 import { REASON_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Sheet, TypeTag } from '../ui';
+import { t } from '../i18n';
 
 export interface SheetTarget {
   /** dzień rozpoczęcia brakującej zmiany */
@@ -19,13 +20,13 @@ export interface SheetTarget {
   absent?: Worker;
 }
 
-const KIND_LABEL = { reserve: 'z rezerwy', surplus: 'z nadwyżki', move: 'przesunięcie', extra: 'dodatkowa zmiana' };
+const KIND_LABEL = { reserve: 'z rezerwy', surplus: 'z nadwyżki', move: 'przesunięcie', extra: 'dodatkowa zmiana' } as const;
 
 function badge(v: Variant): string {
-  const parts = [`${v.moves} ${v.moves === 1 ? 'ruch' : 'ruchy'}`];
-  if (v.extras) parts.push(v.agency ? 'agencja' : 'nadgodziny');
-  else parts.push('bez nadgodzin');
-  if (v.otherLine) parts.push('inna linia');
+  const parts = [t(v.moves === 1 ? '{n} ruch' : '{n} ruchy', { n: v.moves })];
+  if (v.extras) parts.push(t(v.agency ? 'agencja' : 'nadgodziny'));
+  else parts.push(t('bez nadgodzin'));
+  if (v.otherLine) parts.push(t('inna linia'));
   return parts.join(' · ');
 }
 
@@ -82,8 +83,8 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
   const assignManual = () => {
     const opt = manualOptions.find((o) => o.w.id === manual);
     if (!opt) return;
-    if (opt.lv < station.minLevel && !confirm(`${opt.w.name} ma poziom ${opt.lv} (wymagany ${station.minLevel}). Przypisać mimo to?`)) return;
-    if (opt.rest && !opt.rest.ok && !confirm(`${opt.w.name}: brak 11 h odpoczynku (przed: ${opt.rest.before} h, po: ${opt.rest.after} h). Przypisać mimo to?`)) return;
+    if (opt.lv < station.minLevel && !confirm(t('{name} ma poziom {lv} (wymagany {min}). Przypisać mimo to?', { name: opt.w.name, lv: opt.lv, min: station.minLevel }))) return;
+    if (opt.rest && !opt.rest.ok && !confirm(t('{name}: brak 11 h odpoczynku (przed: {before} h, po: {after} h). Przypisać mimo to?', { name: opt.w.name, before: opt.rest.before, after: opt.rest.after }))) return;
     update(
       (d) => {
         if (target.absent) addAbsence(d, target.absent.id, target.date, reason);
@@ -104,40 +105,40 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
 
   return (
     <Sheet
-      title={target.absent ? `Brak: ${target.absent.name}` : `Uzupełnij: ${station.name}`}
-      sub={`${station.name} · ${lineName(state, target.lineId)} · ${fmtDate(target.date)} ${range} · wymagany poziom ≥${station.minLevel}`}
+      title={target.absent ? `${t('Brak')}: ${target.absent.name}` : `${t('Uzupełnij')}: ${station.name}`}
+      sub={`${station.name} · ${lineName(state, target.lineId)} · ${fmtDate(target.date)} ${range} · ${t('wymagany poziom')} ≥${station.minLevel}`}
       onClose={onClose}
     >
       {target.absent && (
         <label className="field">
-          Powód nieobecności
+          {t('Powód nieobecności')}
           <select value={reason} onChange={(e) => setReason(e.target.value as AbsenceReason)}>
             {Object.entries(REASON_LABEL).map(([k, v]) => (
               <option key={k} value={k}>
-                {v}
+                {t(v)}
               </option>
             ))}
           </select>
         </label>
       )}
 
-      <h3>Podpowiedzi według matrycy</h3>
-      {variants.length === 0 && <div className="note red">Brak kandydatów z poziomem ≥{station.minLevel}, którzy mogą przyjść bez łamania 11 h odpoczynku. Użyj przypisania ręcznego poniżej.</div>}
+      <h3>{t('Podpowiedzi według matrycy')}</h3>
+      {variants.length === 0 && <div className="note red">{t('Brak kandydatów z poziomem ≥{min}, którzy mogą przyjść bez łamania 11 h odpoczynku. Użyj przypisania ręcznego poniżej.', { min: station.minLevel })}</div>}
       {variants.map((v, i) => (
         <button type="button" key={i} className={`variant ${i === picked ? 'on' : ''}`} onClick={() => setPicked(i)}>
           <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-            <strong>Wariant {i + 1}{i === 0 ? ' · rekomendowany' : ''}</strong>
+            <strong>{t('Wariant')} {i + 1}{i === 0 ? ` · ${t('rekomendowany')}` : ''}</strong>
             <span className="tag">{badge(v)}</span>
           </div>
           {v.steps.map((s, j) => (
             <div className="step" key={j}>
               <span className="n">{j + 1}</span>
               <span>
-                <b>{s.worker.name}</b> <TypeTag w={s.worker} /> — {s.kind === 'extra' ? 'wolne' : stationName(state, s.fromStationId)} → {stationName(state, s.toStationId)}
-                {s.fromLineId !== s.toLineId && ` (z linii ${lineName(state, s.fromLineId)})`}
+                <b>{s.worker.name}</b> <TypeTag w={s.worker} /> — {s.kind === 'extra' ? t('wolne') : t(stationName(state, s.fromStationId))} → {stationName(state, s.toStationId)}
+                {s.fromLineId !== s.toLineId && ` (${t('z linii')} ${lineName(state, s.fromLineId)})`}
                 <br />
                 <span className="sub">
-                  {KIND_LABEL[s.kind]} · poziom {s.level}
+                  {t(KIND_LABEL[s.kind])} · {t('Poziom')} {s.level}
                   {s.extraShift && ` · ${fmtRange(s.extraShift.start, s.extraShift.hours)}`}
                   {s.warnings.map((w) => ` · ⚠ ${w}`).join('')}
                 </span>
@@ -149,42 +150,42 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
 
       {blocked.length > 0 && (
         <div className="note amber">
-          Zablokowani (nie da się ich zabrać bez zostawienia pustego stanowiska):{' '}
+          {t('Zablokowani (nie da się ich zabrać bez zostawienia pustego stanowiska):')}{' '}
           {blocked.map((b) => `${b.worker.name} (${stationName(state, b.stationId)})`).join(', ')}
         </div>
       )}
 
       <div className="row">
         <button type="button" className="btn success grow" disabled={!variants.length} onClick={approve}>
-          Zatwierdź wariant {variants.length ? picked + 1 : ''}
+          {t('Zatwierdź wariant')} {variants.length ? picked + 1 : ''}
         </button>
         {target.absent && (
           <button type="button" className="btn" onClick={onlyAbsence}>
-            Tylko zgłoś brak
+            {t('Tylko zgłoś brak')}
           </button>
         )}
       </div>
 
       <details>
-        <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>Przypisz ręcznie</summary>
+        <summary style={{ cursor: 'pointer', fontWeight: 600, fontSize: 14 }}>{t('Przypisz ręcznie')}</summary>
         <div className="row" style={{ marginTop: 10 }}>
           <label className="field grow">
-            Pracownik (z poziomem na {station.name})
+            {t('Pracownik (z poziomem na {station})', { station: station.name })}
             <select value={manual} onChange={(e) => setManual(e.target.value)}>
-              <option value="">— wybierz —</option>
+              <option value="">{t('— wybierz —')}</option>
               {manualOptions.map(({ w, e, rest, lv }) => (
                 <option key={w.id} value={w.id}>
-                  {`poz. ${lv} · ${w.name} · ${e ? `na zmianie (${stationName(state, e.stationId)})` : plannedShift(state, w, target.date) ? 'inna zmiana' : 'wolne'}${rest && !rest.ok ? ' · brak 11 h' : ''}`}
+                  {`${t('poz.')} ${lv} · ${w.name} · ${e ? `${t('na zmianie')} (${t(stationName(state, e.stationId))})` : plannedShift(state, w, target.date) ? t('inna zmiana') : t('wolne')}${rest && !rest.ok ? ` · ${t('brak 11 h')}` : ''}`}
                 </option>
               ))}
             </select>
           </label>
           <button type="button" className="btn primary" disabled={!manual} onClick={assignManual}>
-            Przypisz
+            {t('Przypisz')}
           </button>
         </div>
       </details>
-      {variants[picked] && <div className="sub">Zapis w historii: {variants[picked].steps.map((s) => describeStep(state, s)).join('; ')}</div>}
+      {variants[picked] && <div className="sub">{t('Zapis w historii:')} {variants[picked].steps.map((s) => describeStep(state, s)).join('; ')}</div>}
     </Sheet>
   );
 }

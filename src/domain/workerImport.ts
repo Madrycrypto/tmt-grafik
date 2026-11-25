@@ -1,4 +1,5 @@
 import { uid } from './actions';
+import { t } from '../i18n';
 import { BRIGADES, linePatterns, patternBrigades } from './types';
 import type { AppState, BrigadeId, Worker, WorkerType } from './types';
 
@@ -52,14 +53,14 @@ export function parseDelimited(text: string): string[][] {
 }
 
 const HEADERS: Record<string, string[]> = {
-  name: ['imie i nazwisko', 'nazwisko i imie', 'pracownik', 'nazwisko', 'name', 'osoba'],
-  type: ['typ', 'rodzaj', 'typ pracownika'],
-  agency: ['agencja', 'nazwa agencji'],
-  system: ['system', 'system pracy', 'czas pracy', 'godziny', 'zmiana h'],
-  brigade: ['brygada', 'bryg', 'bryg.', 'grupa'],
-  line: ['linia'],
-  station: ['stanowisko', 'stanowisko macierzyste'],
-  active: ['aktywny', 'status'],
+  name: ['imie i nazwisko', 'nazwisko i imie', 'pracownik', 'nazwisko', 'name', 'osoba', '姓名', '员工'],
+  type: ['typ', 'rodzaj', 'typ pracownika', '类型'],
+  agency: ['agencja', 'nazwa agencji', '劳务公司', '中介'],
+  system: ['system', 'system pracy', 'czas pracy', 'godziny', 'zmiana h', '班制'],
+  brigade: ['brygada', 'bryg', 'bryg.', 'grupa', '班组'],
+  line: ['linia', '产线', '线体'],
+  station: ['stanowisko', 'stanowisko macierzyste', '工位'],
+  active: ['aktywny', 'status', '在职', '状态'],
 };
 
 export interface ImportItem {
@@ -75,9 +76,9 @@ export interface ImportItem {
 function parseType(v: string, agency: string): WorkerType | null {
   const t = norm(v);
   if (!t) return agency ? 'AG' : null;
-  if (['pl', 'polak', 'polska', 'tmt', 'tmt pl'].includes(t)) return 'PL';
-  if (['cn', 'chiny', 'chinczyk', 'tmt cn', 'china'].includes(t)) return 'CN';
-  if (t.startsWith('ag') || t.includes('agencj')) return 'AG';
+  if (['pl', 'polak', 'polska', 'tmt', 'tmt pl', '波方', '波兰'].includes(t)) return 'PL';
+  if (['cn', 'chiny', 'chinczyk', 'tmt cn', 'china', '中方', '中国'].includes(t)) return 'CN';
+  if (t.startsWith('ag') || t.includes('agencj') || t.includes('劳务')) return 'AG';
   return null;
 }
 
@@ -105,20 +106,20 @@ function patternByHours(state: AppState, hours: number, lineId?: string): string
 function parseActive(v: string): boolean | null {
   const t = norm(v);
   if (!t) return null;
-  if (['nie', 'n', '0', 'false', 'nieaktywny', 'zwolniony'].includes(t)) return false;
+  if (['nie', 'n', '0', 'false', 'nieaktywny', 'zwolniony', '否', '离职'].includes(t)) return false;
   return true;
 }
 
 /** Plan importu listy pracowników (bez zmiany stanu). Pierwszy wiersz to nagłówki. */
 export function planImport(state: AppState, rows: Cell[][], updateExisting: boolean): { items: ImportItem[]; problem?: string } {
-  if (rows.length < 2) return { items: [], problem: 'Plik musi mieć wiersz nagłówków i co najmniej jednego pracownika.' };
+  if (rows.length < 2) return { items: [], problem: t('Plik musi mieć wiersz nagłówków i co najmniej jednego pracownika.') };
   const head = rows[0].map(norm);
   const col: Record<string, number> = {};
   for (const [key, names] of Object.entries(HEADERS)) {
     const i = head.findIndex((h) => names.includes(h));
     if (i >= 0) col[key] = i;
   }
-  if (col.name === undefined) return { items: [], problem: 'Brak kolumny „Imię i nazwisko” (albo „Pracownik”).' };
+  if (col.name === undefined) return { items: [], problem: t('Brak kolumny „Imię i nazwisko” (albo „Pracownik”).') };
   const known = new Set(Object.values(col));
   const skillCols = head.map((h, i) => ({ h, i })).filter((x) => !known.has(x.i) && x.h);
 
@@ -130,42 +131,42 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
     const name = get(r, 'name').replace(/\s+/g, ' ');
     const item: ImportItem = { row: idx + 2, name, action: 'error', errors: [], warnings: [], skills: 0 };
     if (!name) {
-      item.errors.push('brak nazwiska');
+      item.errors.push(t('brak nazwiska'));
       return item;
     }
     const key = norm(name);
     if (seen.has(key)) {
-      item.errors.push('powtórzone w pliku');
+      item.errors.push(t('powtórzone w pliku'));
       return item;
     }
     seen.add(key);
     const existing = byName.get(key);
     if (existing && !updateExisting) {
-      item.errors.push('już istnieje (zaznacz „aktualizuj istniejących”)');
+      item.errors.push(t('już istnieje (zaznacz „aktualizuj istniejących”)'));
       return item;
     }
 
     const agency = get(r, 'agency');
     const typeRaw = get(r, 'type');
     const type = parseType(typeRaw, agency) ?? existing?.type ?? 'PL';
-    if (typeRaw && !parseType(typeRaw, agency)) item.warnings.push(`nieznany typ „${typeRaw}” → ${type}`);
+    if (typeRaw && !parseType(typeRaw, agency)) item.warnings.push(t('nieznany typ „{raw}” → {type}', { raw: typeRaw, type }));
 
     const lineRaw = get(r, 'line');
     const line = lineRaw ? state.lines.find((l) => norm(l.name) === norm(lineRaw)) : state.lines.find((l) => l.id === existing?.lineId);
-    if (!line) item.errors.push(lineRaw ? `nieznana linia „${lineRaw}” (dodaj ją w Linie i stanowiska)` : 'brak linii');
+    if (!line) item.errors.push(lineRaw ? t('nieznana linia „{raw}” (dodaj ją w Linie i stanowiska)', { raw: lineRaw }) : t('brak linii'));
 
     const sysRaw = get(r, 'system');
     let patternId = patternFor(state, sysRaw, line?.id) ?? (sysRaw ? undefined : existing?.patternId);
     if (!patternId) patternId = (type === 'CN' ? patternByHours(state, 12, line?.id) : patternByHours(state, 8, line?.id)) ?? state.patterns[0]?.id;
-    if (sysRaw && !patternFor(state, sysRaw, line?.id)) item.warnings.push(`nieznany system „${sysRaw}”`);
-    if (!patternId) item.errors.push('brak wzorców zmian w ustawieniach');
+    if (sysRaw && !patternFor(state, sysRaw, line?.id)) item.warnings.push(t('nieznany system „{raw}”', { raw: sysRaw }));
+    if (!patternId) item.errors.push(t('brak wzorców zmian w ustawieniach'));
 
     const bRaw = get(r, 'brigade').toUpperCase().replace(/^BRYG(ADA)?\.?\s*/, '');
     const brigade = (BRIGADES as string[]).includes(bRaw) ? (bRaw as BrigadeId) : existing?.brigade;
-    if (!brigade) item.errors.push(bRaw ? `brygada „${bRaw}” (dozwolone A–D)` : 'brak brygady');
+    if (!brigade) item.errors.push(bRaw ? t('brygada „{raw}” (dozwolone A–D)', { raw: bRaw }) : t('brak brygady'));
 
     if (brigade && patternId && !patternBrigades(state.patterns.find((p) => p.id === patternId)).includes(brigade))
-      item.warnings.push(`brygada ${brigade} nie występuje w tym systemie zmianowym`);
+      item.warnings.push(t('brygada {b} nie występuje w tym systemie zmianowym', { b: brigade }));
 
     if (item.errors.length || !line || !brigade || !patternId) return item;
 
@@ -175,7 +176,7 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
     if (col.station !== undefined) {
       const st = stations.find((s) => norm(s.name) === norm(stRaw));
       homeStationId = st?.id ?? null;
-      if (stRaw && !st && !['rezerwa', '-'].includes(norm(stRaw))) item.warnings.push(`stanowisko „${stRaw}” nie istnieje na ${line.name} → rezerwa`);
+      if (stRaw && !st && !['rezerwa', '-'].includes(norm(stRaw))) item.warnings.push(t('stanowisko „{raw}” nie istnieje na {line} → rezerwa', { raw: stRaw, line: line.name }));
     }
 
     const skills = { ...(existing?.skills ?? {}) };
@@ -186,7 +187,7 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
       if (raw === '') continue;
       const lv = Number(raw.replace(',', '.'));
       if (!Number.isInteger(lv) || lv < 0 || lv > 4) {
-        item.warnings.push(`poziom „${raw}” na ${st.name} pominięty (0–4)`);
+        item.warnings.push(t('poziom „{raw}” na {station} pominięty (0–4)', { raw, station: st.name }));
         continue;
       }
       if (lv === 0) delete skills[st.id];

@@ -4,6 +4,7 @@ import { SYSTEM_LABEL, buildSystem } from '../domain/templates';
 import type { SystemKind } from '../domain/templates';
 import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import { useApp } from '../data/AppContext';
+import { t } from '../i18n';
 
 /** Dodawanie systemów 1/2/3/4-zmianowych (8 h lub 12 h) i przypisanie ich do linii. */
 export default function Systems() {
@@ -36,10 +37,9 @@ export default function Systems() {
 
   return (
     <section className="card stack">
-      <h2>Systemy zmianowe</h2>
+      <h2>{t('Systemy zmianowe')}</h2>
       <p className="sub" style={{ margin: 0 }}>
-        Każda linia może pracować w innym systemie: 1, 2 lub 3 zmiany (pn–pt) albo 4 brygady w ruchu ciągłym, na zmianach 8 h lub 12 h. Na jednej linii możesz łączyć
-        system 8 h i 12 h — obsada liczy się godzinowo, więc dobę pokryją 3 osoby po 8 h albo 2 po 12 h.
+        {t('Każda linia może pracować w innym systemie: 1, 2 lub 3 zmiany (pn–pt) albo 4 brygady w ruchu ciągłym, na zmianach 8 h lub 12 h. Na jednej linii możesz łączyć system 8 h i 12 h — obsada liczy się godzinowo, więc dobę pokryją 3 osoby po 8 h albo 2 po 12 h.')}
       </p>
       {state.patterns.map((p) => {
         const workers = state.workers.filter((w) => w.patternId === p.id).length;
@@ -47,13 +47,13 @@ export default function Systems() {
         const shifts = [...new Set(p.sequence.filter((c) => c !== OFF))]
           .map((c) => state.shiftDefs.find((d) => d.code === c))
           .filter(Boolean)
-          .map((d) => `${d!.label} ${fmtRange(d!.start, d!.hours)}`);
+          .map((d) => `${t(d!.label)} ${fmtRange(d!.start, d!.hours)}`);
         return (
           <div key={p.id} className="list-item">
             <span className="grow">
               <b>{p.name}</b>
               <div className="sub">
-                brygady {patternBrigades(p).join(', ')} · {shifts.join(' / ')} · {workers} os. · linie: {lines.join(', ') || '—'}
+                {t('brygady')} {patternBrigades(p).join(', ')} · {shifts.join(' / ')} · {workers} {t('os.')} · {t('linie')}: {lines.join(', ') || '—'}
               </div>
             </span>
             <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
@@ -66,41 +66,41 @@ export default function Systems() {
                   }, `${p.name}: ${e.target.checked ? 'wolne w święta ustawowe' : 'praca w święta ustawowe'}`)
                 }
               />
-              wolne w święta
+              {t('wolne w święta')}
             </label>
             <button
               type="button"
               className="btn small"
               disabled={workers > 0}
-              title={workers > 0 ? 'Najpierw przenieś pracowników do innego systemu' : ''}
+              title={workers > 0 ? t('Najpierw przenieś pracowników do innego systemu') : ''}
               onClick={() => remove(p.id)}
             >
-              Usuń
+              {t('Usuń')}
             </button>
           </div>
         );
       })}
-      <h3 style={{ marginTop: 8 }}>Dodaj system</h3>
+      <h3 style={{ marginTop: 8 }}>{t('Dodaj system')}</h3>
       <div className="row">
         <label className="field">
-          System
+          {t('System')}
           <select value={kind} onChange={(e) => setKind(e.target.value as SystemKind)}>
             {(Object.keys(SYSTEM_LABEL) as SystemKind[]).map((k) => (
               <option key={k} value={k}>
-                {SYSTEM_LABEL[k]}
+                {t(SYSTEM_LABEL[k])}
               </option>
             ))}
           </select>
         </label>
         <label className="field">
-          Długość zmiany
+          {t('Długość zmiany')}
           <select value={hours} onChange={(e) => setHours(Number(e.target.value) as 8 | 12)}>
-            <option value={8}>8 h</option>
-            <option value={12}>12 h</option>
+            <option value={8}>{t('8 h')}</option>
+            <option value={12}>{t('12 h')}</option>
           </select>
         </label>
         <label className="field">
-          Start pierwszej zmiany
+          {t('Start pierwszej zmiany')}
           <select value={start} onChange={(e) => setStart(Number(e.target.value))}>
             {Array.from({ length: 24 }, (_, h) => (
               <option key={h} value={h}>
@@ -110,9 +110,9 @@ export default function Systems() {
           </select>
         </label>
         <label className="field">
-          Przypisz do linii
+          {t('Przypisz do linii')}
           <select value={lineId} onChange={(e) => setLineId(e.target.value)}>
-            <option value="">— później —</option>
+            <option value="">{t('— później —')}</option>
             {state.lines.map((l) => (
               <option key={l.id} value={l.id}>
                 {l.name}
@@ -122,14 +122,14 @@ export default function Systems() {
         </label>
       </div>
       {'error' in preview ? (
-        <div className="note amber">{preview.error}</div>
+        <div className="note amber">{t(preview.error)}</div>
       ) : (
         <div className="note">
-          <b>{preview.pattern.name}</b> · brygady {patternBrigades(preview.pattern).join(', ')}
+          <b>{preview.pattern.name}</b> · {t('brygady')} {patternBrigades(preview.pattern).join(', ')}
         </div>
       )}
       <button type="button" className="btn primary" disabled={'error' in preview} onClick={add}>
-        Dodaj system
+        {t('Dodaj system')}
       </button>
     </section>
   );

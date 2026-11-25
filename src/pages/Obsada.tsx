@@ -8,6 +8,7 @@ import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
 import type { SheetTarget } from './ReplacementSheet';
+import { t } from '../i18n';
 
 function deficitWindow(s: StationStatus, start: number): { start: number; end: number } {
   const low = s.perHour.map((n, i) => (n < s.station.required ? i : -1)).filter((i) => i >= 0);
@@ -22,24 +23,24 @@ function PersonRow({ e, onAbsent, onUndo }: { e: RosterEntry; onAbsent: () => vo
         <b style={e.absence ? { textDecoration: 'line-through', color: 'var(--muted)' } : undefined}>{e.worker.name}</b>{' '}
         <TypeTag w={e.worker} />
         <div className="sub">
-          {fmtRange(e.shift.start, e.shift.end - e.shift.start)} · bryg. {e.worker.brigade}
-          {e.shift.extra && ' · dodatkowa zmiana'}
-          {e.moved && !e.shift.extra && ' · przesunięty'}
+          {fmtRange(e.shift.start, e.shift.end - e.shift.start)} · {t('bryg.')} {e.worker.brigade}
+          {e.shift.extra && ` · ${t('dodatkowa zmiana')}`}
+          {e.moved && !e.shift.extra && ` · ${t('przesunięty')}`}
         </div>
       </div>
       {e.stationId && <Level value={lv} />}
       {e.absence ? (
         <>
-          <span className="tag red">{REASON_LABEL[e.absence.reason]}</span>
+          <span className="tag red">{t(REASON_LABEL[e.absence.reason])}</span>
           {e.absence.from === e.absence.to && (
             <button type="button" className="btn small ghost" onClick={onUndo}>
-              Cofnij
+              {t('Cofnij')}
             </button>
           )}
         </>
       ) : (
         <button type="button" className="btn small" onClick={onAbsent}>
-          Brak
+          {t('Brak')}
         </button>
       )}
     </div>
@@ -60,7 +61,7 @@ export default function Obsada() {
   const window = useMemo(() => ({ start: def?.start ?? 0, end: (def?.start ?? 0) + (def?.hours ?? 8) }), [def]);
   const ls = useMemo(() => lineStatus(state, lineId, date, window), [state, lineId, date, window]);
 
-  if (!state.lines.length) return <div className="card empty">Najpierw dodaj linię i stanowiska w zakładce „Linie i stanowiska”.</div>;
+  if (!state.lines.length) return <div className="card empty">{t('Najpierw dodaj linię i stanowiska w zakładce „Linie i stanowiska”.')}</div>;
 
   const present = ls.entries.filter((e) => !e.absence);
   const gaps = ls.statuses.filter((s) => !s.ok);
@@ -95,14 +96,14 @@ export default function Obsada() {
     );
 
   const resetDay = () => {
-    if (!confirm('Usunąć wszystkie ręczne przesunięcia i dodatkowe zmiany na tej linii w tym dniu? Nieobecności zostaną.')) return;
+    if (!confirm(t('Usunąć wszystkie ręczne przesunięcia i dodatkowe zmiany na tej linii w tym dniu? Nieobecności zostaną.'))) return;
     update((d) => {
       d.assignments = d.assignments.filter((a) => !(a.date === date && a.lineId === lineId));
     }, `Przywrócono plan dnia ${date} (${state.lines.find((l) => l.id === lineId)?.name})`);
   };
 
   const hourCells = (s: StationStatus) => (
-    <div className="hours" aria-label="Pokrycie w kolejnych godzinach">
+    <div className="hours" aria-label={t('Pokrycie w kolejnych godzinach')}>
       {s.perHour.map((n, i) => (
         <span key={i} className={n < s.station.required ? 'h-low' : n > s.station.required ? 'h-over' : 'h-ok'} title={`${fmtHour(window.start + i)}: ${n}/${s.station.required}`} />
       ))}
@@ -116,20 +117,20 @@ export default function Obsada() {
           <div className="sub">
             {fmtDate(date)} · {def ? shiftLabel(def) : ''}
           </div>
-          <h1>Obsada — {state.lines.find((l) => l.id === lineId)?.name}</h1>
+          <h1>{t('Obsada')} — {state.lines.find((l) => l.id === lineId)?.name}</h1>
         </div>
         <div className="row">
           <LineSelect state={state} value={lineId} onChange={setLineId} />
           <label className="field">
-            Dzień
+            {t('Dzień')}
             <div className="row" style={{ gap: 4, flexWrap: 'nowrap' }}>
-              <button type="button" className="btn small" aria-label="Poprzedni dzień" onClick={() => setDate(addDays(date, -1))}>‹</button>
+              <button type="button" className="btn small" aria-label={t('Poprzedni dzień')} onClick={() => setDate(addDays(date, -1))}>‹</button>
               <input className="input" type="date" value={date} onChange={(e) => e.target.value && setDate(e.target.value)} />
-              <button type="button" className="btn small" aria-label="Następny dzień" onClick={() => setDate(addDays(date, 1))}>›</button>
+              <button type="button" className="btn small" aria-label={t('Następny dzień')} onClick={() => setDate(addDays(date, 1))}>›</button>
             </div>
           </label>
           <label className="field">
-            Zmiana / okno
+            {t('Zmiana / okno')}
             <select value={def?.code ?? ''} onChange={(e) => setCode(e.target.value)}>
               {options.map((d) => (
                 <option key={d.code} value={d.code}>
@@ -141,45 +142,45 @@ export default function Obsada() {
         </div>
       </div>
 
-      <section className="kpis" aria-label="Wskaźniki zmiany">
+      <section className="kpis" aria-label={t('Wskaźniki zmiany')}>
         <div className="kpi">
-          <div className="k">Obecni / zaplanowani</div>
+          <div className="k">{t('Obecni / zaplanowani')}</div>
           <div className="v">
             {present.length} / {ls.entries.length}
           </div>
           <div className="d" style={{ color: ls.entries.length > present.length ? 'var(--red-ink)' : undefined }}>
-            {ls.entries.length - present.length} nieobecnych
+            {t('{n} nieobecnych', { n: ls.entries.length - present.length })}
           </div>
         </div>
         <div className="kpi">
-          <div className="k">Stanowiska bez pokrycia</div>
+          <div className="k">{t('Stanowiska bez pokrycia')}</div>
           <div className="v" style={{ color: gaps.length ? 'var(--red-ink)' : 'var(--green-ink)' }}>{gaps.length}</div>
-          <div className="d">{gaps.map((g) => g.station.name).join(', ') || 'wszystko obsadzone'}</div>
+          <div className="d">{gaps.map((g) => g.station.name).join(', ') || t('wszystko obsadzone')}</div>
         </div>
         <div className="kpi">
-          <div className="k">Bez zastępcy na zmianie</div>
+          <div className="k">{t('Bez zastępcy na zmianie')}</div>
           <div className="v" style={{ color: sole.length ? 'var(--amber-ink)' : undefined }}>{sole.length}</div>
           <div className="d">{sole.map((g) => g.station.name).join(', ') || '—'}</div>
         </div>
         <div className="kpi">
-          <div className="k">Skład: PL · CN · agencja</div>
+          <div className="k">{t('Skład: PL · CN · agencja')}</div>
           <div className="v">
             {count('PL')} · {count('CN')} · {count('AG')}
           </div>
-          <div className="d">pokrycie liczone godzinowo</div>
+          <div className="d">{t('pokrycie liczone godzinowo')}</div>
         </div>
       </section>
 
       <section className="card">
         <div className="card-head">
-          <h2>Stanowiska</h2>
+          <h2>{t('Stanowiska')}</h2>
           <div className="row" style={{ alignItems: 'center' }}>
             <span className="legend">
-              <span><span className="dot h-ok" /> pokryte</span>
-              <span><span className="dot h-low" /> brak</span>
+              <span><span className="dot h-ok" /> {t('pokryte')}</span>
+              <span><span className="dot h-low" /> {t('brak')}</span>
             </span>
             <button type="button" className="btn small" onClick={resetDay}>
-              Przywróć plan dnia
+              {t('Przywróć plan dnia')}
             </button>
           </div>
         </div>
@@ -189,17 +190,17 @@ export default function Obsada() {
               <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
                 <strong>{s.station.name}</strong>
                 <span className={`tag ${s.ok ? (s.soleQualified && s.station.required === 1 ? 'amber' : 'green') : 'red'}`}>
-                  {s.ok ? `OK · ${s.min}/${s.station.required}` : `Brak · ${s.min}/${s.station.required}`}
+                  {s.ok ? `OK · ${s.min}/${s.station.required}` : `${t('Brak#obsada')} · ${s.min}/${s.station.required}`}
                 </span>
               </div>
               {hourCells(s)}
-              {s.people.length === 0 && <div className="sub">Nikt nie jest zaplanowany.</div>}
+              {s.people.length === 0 && <div className="sub">{t('Nikt nie jest zaplanowany.')}</div>}
               {s.people.map((e) => (
                 <PersonRow key={e.worker.id + e.shift.date} e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} />
               ))}
               {!s.ok && (
                 <button type="button" className="btn danger" onClick={() => fillGap(s)}>
-                  Znajdź zastępstwo
+                  {t('Znajdź zastępstwo')}
                 </button>
               )}
             </div>
@@ -209,21 +210,21 @@ export default function Obsada() {
 
       <section className="card">
         <div className="card-head">
-          <h2>Rezerwa i osoby bez stanowiska</h2>
+          <h2>{t('Rezerwa i osoby bez stanowiska')}</h2>
           <span className="sub">{ls.reserve.length} os.</span>
         </div>
-        {ls.reserve.length === 0 && <div className="sub">Brak rezerwy na tej zmianie.</div>}
+        {ls.reserve.length === 0 && <div className="sub">{t('Brak rezerwy na tej zmianie.')}</div>}
         {ls.reserve.map((e) => (
           <div key={e.worker.id + e.shift.date} className="list-item">
             <PersonRow e={e} onAbsent={() => openAbsent(e)} onUndo={() => undoAbsence(e)} />
             {!e.absence && (
               <label className="field" style={{ minWidth: 200 }}>
-                Przypisz do
+                {t('Przypisz do')}
                 <select value="" onChange={(ev) => assignReserve(e, ev.target.value)}>
-                  <option value="">— stanowisko —</option>
+                  <option value="">{t('— stanowisko —')}</option>
                   {ls.statuses.map((s) => (
                     <option key={s.station.id} value={s.station.id}>
-                      {s.station.name} (poz. {level(e.worker, s.station.id)})
+                      {s.station.name} ({t('poz.')} {level(e.worker, s.station.id)})
                     </option>
                   ))}
                 </select>

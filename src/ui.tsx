@@ -1,8 +1,9 @@
 import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { fmtRange } from './domain/dates';
 import type { AppState, ShiftDef, Worker } from './domain/types';
 import { LEVEL_LABEL, TYPE_LABEL } from './domain/types';
+import { lang, setLang, t } from './i18n';
 
 const PATHS: Record<string, ReactNode> = {
   obsada: <><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 10h18M9 4v16" /></>,
@@ -41,7 +42,7 @@ export function Sheet({ title, sub, onClose, children }: { title: ReactNode; sub
             <h2>{title}</h2>
             {sub && <div className="sub">{sub}</div>}
           </div>
-          <button type="button" className="btn ghost small" aria-label="Zamknij" onClick={onClose}>
+          <button type="button" className="btn ghost small" aria-label={t('Zamknij')} onClick={onClose}>
             <span style={{ width: 20, height: 20, display: 'inline-flex' }}>
               <Icon name="close" />
             </span>
@@ -55,15 +56,15 @@ export function Sheet({ title, sub, onClose, children }: { title: ReactNode; sub
 
 export function Level({ value, onClick, title }: { value: number; onClick?: () => void; title?: string }) {
   const label = value ? String(value) : '–';
-  const t = title ?? `Poziom ${value}: ${LEVEL_LABEL[value] ?? ''}`;
+  const tip = title ?? `${t('Poziom')} ${value}: ${t(LEVEL_LABEL[value] ?? '')}`;
   if (onClick)
     return (
-      <button type="button" className={`lv lv${value}`} onClick={onClick} title={t} aria-label={t}>
+      <button type="button" className={`lv lv${value}`} onClick={onClick} title={tip} aria-label={tip}>
         {label}
       </button>
     );
   return (
-    <span className={`lv lv${value}`} title={t}>
+    <span className={`lv lv${value}`} title={tip}>
       {label}
     </span>
   );
@@ -71,7 +72,7 @@ export function Level({ value, onClick, title }: { value: number; onClick?: () =
 
 export function TypeTag({ w }: { w: Worker }) {
   const cls = w.type === 'CN' ? 'blue' : w.type === 'AG' ? 'amber' : '';
-  return <span className={`tag ${cls}`}>{w.type === 'AG' && w.agency ? w.agency : TYPE_LABEL[w.type]}</span>;
+  return <span className={`tag ${cls}`}>{w.type === 'AG' && w.agency ? w.agency : t(TYPE_LABEL[w.type])}</span>;
 }
 
 /** Stan zapamiętany w przeglądarce (wybrana linia, data itp.). */
@@ -96,7 +97,24 @@ export function usePersistent<T>(key: string, initial: T): [T, (v: T) => void] {
 }
 
 export function shiftLabel(def: ShiftDef): string {
-  return `${def.label} · ${fmtRange(def.start, def.hours)} (${def.hours} h)`;
+  return `${t(def.label)} · ${fmtRange(def.start, def.hours)} (${def.hours} h)`;
+}
+
+/** Przełącznik języka PL / 中文. */
+export function LangSwitch({ dark }: { dark?: boolean }) {
+  const base: CSSProperties = { border: 0, background: 'transparent', cursor: 'pointer', padding: '4px 6px', borderRadius: 6, fontSize: 12, fontWeight: 600 };
+  const on = dark ? { background: '#2a3447', color: '#fff' } : { background: 'var(--accent-soft)', color: 'var(--accent)' };
+  const off = { color: dark ? '#9eabc2' : 'var(--muted)' };
+  return (
+    <span role="group" aria-label="Język / 语言" style={{ display: 'inline-flex', gap: 2 }}>
+      <button type="button" style={{ ...base, ...(lang === 'pl' ? on : off) }} onClick={() => lang !== 'pl' && setLang('pl')}>
+        PL
+      </button>
+      <button type="button" style={{ ...base, ...(lang === 'zh' ? on : off) }} onClick={() => lang !== 'zh' && setLang('zh')}>
+        中文
+      </button>
+    </span>
+  );
 }
 
 /** Zmiana 8 h obejmująca bieżącą godzinę — domyślne okno pulpitu. */
@@ -110,7 +128,7 @@ export function currentWindowCode(state: AppState): string {
 export function LineSelect({ state, value, onChange }: { state: AppState; value: string; onChange: (v: string) => void }) {
   return (
     <label className="field">
-      Linia
+      {t('Linia')}
       <select value={value} onChange={(e) => onChange(e.target.value)}>
         {state.lines.map((l) => (
           <option key={l.id} value={l.id}>

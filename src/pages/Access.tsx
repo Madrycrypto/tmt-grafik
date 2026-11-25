@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { useApp } from '../data/AppContext';
 import type { Role } from '../data/AppContext';
 import { appUrl } from '../data/backend';
+import { t } from '../i18n';
 
 interface Allowed {
   email: string;
@@ -9,9 +10,9 @@ interface Allowed {
 }
 
 const ROLE_INFO: Record<Role, string> = {
-  admin: 'admin — wszystko + zarządzanie dostępem',
-  editor: 'edytor — zmienia grafik, obsadę, matrycę',
-  viewer: 'podgląd — tylko ogląda',
+  admin: t('admin — wszystko + zarządzanie dostępem'),
+  editor: t('edytor — zmienia grafik, obsadę, matrycę'),
+  viewer: t('podgląd — tylko ogląda'),
 };
 
 /** Lista osób z dostępem do aplikacji. Widoczna tylko dla admina w trybie z bazą. */
@@ -41,7 +42,7 @@ export default function Access() {
     setError(null);
     setInfo(null);
     const { error: err } = await p;
-    if (err) setError(err.message.includes('duplicate') ? 'Ten e-mail już jest na liście.' : err.message);
+    if (err) setError(err.message.includes('duplicate') ? t('Ten e-mail już jest na liście.') : err.message);
     else {
       setInfo(ok);
       await load();
@@ -50,27 +51,27 @@ export default function Access() {
 
   const add = () => {
     const e = email.trim().toLowerCase();
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return setError('Podaj poprawny adres e-mail.');
+    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(e)) return setError(t('Podaj poprawny adres e-mail.'));
     void run(
       db.from('allowed_users').insert({ email: e, role: newRole }),
-      `Dodano ${e}. Przekaż tej osobie adres ${appUrl()} — przy pierwszym wejściu wybiera „Pierwsze logowanie” i ustawia hasło.`,
+      t('Dodano {email}. Przekaż tej osobie adres {url} — przy pierwszym wejściu wybiera „Pierwsze logowanie” i ustawia hasło.', { email: e, url: appUrl() }),
     );
     setEmail('');
   };
 
   return (
     <section className="card stack">
-      <h2>Dostęp do aplikacji</h2>
+      <h2>{t('Dostęp do aplikacji')}</h2>
       <p className="sub" style={{ margin: 0 }}>
-        Tylko osoby z tej listy mogą założyć konto i zobaczyć dane. Usunięcie z listy natychmiast odcina dostęp.
+        {t('Tylko osoby z tej listy mogą założyć konto i zobaczyć dane. Usunięcie z listy natychmiast odcina dostęp.')}
       </p>
       <div className="row">
         <label className="field grow" style={{ minWidth: 220 }}>
-          E-mail
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="lider.zmiany@firma.pl" onKeyDown={(e) => e.key === 'Enter' && add()} />
+          {t('E-mail')}
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder={t('lider.zmiany@firma.pl')} onKeyDown={(e) => e.key === 'Enter' && add()} />
         </label>
         <label className="field">
-          Rola
+          {t('Rola')}
           <select value={newRole} onChange={(e) => setNewRole(e.target.value as Role)}>
             {(Object.keys(ROLE_INFO) as Role[]).map((r) => (
               <option key={r} value={r}>
@@ -80,7 +81,7 @@ export default function Access() {
           </select>
         </label>
         <button type="button" className="btn primary" disabled={!email.trim()} onClick={add}>
-          Dodaj
+          {t('Dodaj')}
         </button>
       </div>
       {error && <div className="note red">{error}</div>}
@@ -90,14 +91,14 @@ export default function Access() {
         return (
           <div key={a.email} className="list-item">
             <span className="grow">
-              <b>{a.email}</b> {me && <span className="tag blue">Ty</span>}
+              <b>{a.email}</b> {me && <span className="tag blue">{t('Ty')}</span>}
             </span>
             <select
               className="input"
               aria-label={`Rola ${a.email}`}
               value={a.role}
               disabled={me}
-              onChange={(e) => void run(db.from('allowed_users').update({ role: e.target.value }).eq('email', a.email), `Zmieniono rolę ${a.email}.`)}
+              onChange={(e) => void run(db.from('allowed_users').update({ role: e.target.value }).eq('email', a.email), t('Zmieniono rolę {email}.', { email: a.email }))}
             >
               {(Object.keys(ROLE_INFO) as Role[]).map((r) => (
                 <option key={r} value={r}>
@@ -109,10 +110,10 @@ export default function Access() {
               type="button"
               className="btn small"
               disabled={me}
-              title={me ? 'Nie możesz usunąć samego siebie' : ''}
-              onClick={() => confirm(`Odebrać dostęp ${a.email}?`) && void run(db.from('allowed_users').delete().eq('email', a.email), `Odebrano dostęp ${a.email}.`)}
+              title={me ? t('Nie możesz usunąć samego siebie') : ''}
+              onClick={() => confirm(t('Odebrać dostęp {email}?', { email: a.email })) && void run(db.from('allowed_users').delete().eq('email', a.email), t('Odebrano dostęp {email}.', { email: a.email }))}
             >
-              Usuń
+              {t('Usuń')}
             </button>
           </div>
         );

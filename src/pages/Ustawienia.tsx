@@ -7,6 +7,7 @@ import { normalize, readCloudConfig, resetDemo, writeCloudConfig } from '../data
 import { useApp } from '../data/AppContext';
 import Access from './Access';
 import Systems from './Systems';
+import { t } from '../i18n';
 
 function Connection() {
   const { backend, user, role } = useApp();
@@ -17,14 +18,14 @@ function Connection() {
   if (backend.mode === 'cloud')
     return (
       <section className="card stack">
-        <h2>Baza danych</h2>
+        <h2>{t('Baza danych')}</h2>
         <div className="note green">
-          Połączono z Supabase ({cfg ? new URL(cfg.url).host : ''}). Zalogowany: <b>{user}</b>, rola: <b>{role}</b>. Dane są widoczne tylko po zalogowaniu i tylko dla osób z listy
-          dostępu.
+          {t('Połączono z Supabase ({host}).', { host: cfg ? new URL(cfg.url).host : '' })} {t('Zalogowany:')} <b>{user}</b>{t(', rola:')} <b>{role}</b>.{' '}
+          {t('Dane są widoczne tylko po zalogowaniu i tylko dla osób z listy dostępu.')}
         </div>
         <div className="row">
           <button type="button" className="btn" onClick={() => void backend.client?.auth.signOut()}>
-            Wyloguj
+            {t('Wyloguj')}
           </button>
         </div>
       </section>
@@ -32,18 +33,18 @@ function Connection() {
 
   return (
     <section className="card stack">
-      <h2>Baza danych</h2>
-      <div className="note amber">Tryb demo: dane przykładowe zapisane tylko w tej przeglądarce. Telefon i komputer nie widzą wzajemnie zmian.</div>
+      <h2>{t('Baza danych')}</h2>
+      <div className="note amber">{t('Tryb demo: dane przykładowe zapisane tylko w tej przeglądarce. Telefon i komputer nie widzą wzajemnie zmian.')}</div>
       <p className="sub" style={{ margin: 0 }}>
-        Podłącz Supabase, żeby dane były wspólne i chronione logowaniem. Instrukcja: plik README w repozytorium.
+        {t('Podłącz Supabase, żeby dane były wspólne i chronione logowaniem. Instrukcja: plik README w repozytorium.')}
       </p>
       <label className="field">
-        Project URL
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://xxxx.supabase.co" />
+        {t('Project URL')}
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder={t('https://xxxx.supabase.co')} />
       </label>
       <label className="field">
-        Klucz anon public
-        <input value={key} onChange={(e) => setKey(e.target.value)} placeholder="eyJhbGciOi…" />
+        {t('Klucz anon public')}
+        <input value={key} onChange={(e) => setKey(e.target.value)} placeholder={t('eyJhbGciOi…')} />
       </label>
       <button
         type="button"
@@ -54,7 +55,7 @@ function Connection() {
           location.reload();
         }}
       >
-        Połącz
+        {t('Połącz')}
       </button>
     </section>
   );
@@ -70,16 +71,16 @@ function ShiftsAndPatterns() {
 
   return (
     <section className="card stack">
-      <h2>Zaawansowane: godziny zmian i cykle</h2>
+      <h2>{t('Zaawansowane: godziny zmian i cykle')}</h2>
       <div className="scroll-x">
         <table style={{ minWidth: 460 }}>
           <thead>
             <tr>
-              <th>Kod</th>
-              <th>Skrót</th>
-              <th>Start</th>
-              <th>Godzin</th>
-              <th>Czas</th>
+              <th>{t('Kod')}</th>
+              <th>{t('Skrót')}</th>
+              <th>{t('Start')}</th>
+              <th>{t('Godzin')}</th>
+              <th>{t('Czas')}</th>
             </tr>
           </thead>
           <tbody>
@@ -87,10 +88,10 @@ function ShiftsAndPatterns() {
               <tr key={s.code}>
                 <td>{s.code}</td>
                 <td>
-                  <input className="input" style={{ width: 60 }} aria-label="Skrót" value={s.label} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.label = e.target.value.slice(0, 3)))} />
+                  <input className="input" style={{ width: 60 }} aria-label={t('Skrót')} value={s.label} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.label = e.target.value.slice(0, 3)))} />
                 </td>
                 <td>
-                  <select className="input" aria-label="Godzina startu" value={s.start} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.start = Number(e.target.value)), `Zmiana ${s.code}: start ${e.target.value}:00`)}>
+                  <select className="input" aria-label={t('Godzina startu')} value={s.start} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.start = Number(e.target.value)), `Zmiana ${s.code}: start ${e.target.value}:00`)}>
                     {Array.from({ length: 24 }, (_, h) => (
                       <option key={h} value={h}>
                         {String(h).padStart(2, '0')}:00
@@ -99,7 +100,7 @@ function ShiftsAndPatterns() {
                   </select>
                 </td>
                 <td>
-                  <input className="input" type="number" min={1} max={16} style={{ width: 70 }} aria-label="Liczba godzin" value={s.hours} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.hours = Math.max(1, Math.min(16, Number(e.target.value) || 8))))} />
+                  <input className="input" type="number" min={1} max={16} style={{ width: 70 }} aria-label={t('Liczba godzin')} value={s.hours} onChange={(e) => update((d) => void (d.shiftDefs.find((x) => x.code === s.code)!.hours = Math.max(1, Math.min(16, Number(e.target.value) || 8))))} />
                 </td>
                 <td>{fmtRange(s.start, s.hours)}</td>
               </tr>
@@ -110,18 +111,18 @@ function ShiftsAndPatterns() {
       {state.patterns.map((p) => (
         <div key={p.id} className="stack" style={{ borderTop: '1px solid var(--line)', paddingTop: 12 }}>
           <label className="field">
-            Nazwa wzorca
+            {t('Nazwa wzorca')}
             <input defaultValue={p.name} onBlur={(e) => e.target.value.trim() && patchPattern(p.id, { name: e.target.value.trim() })} />
           </label>
           <label className="field">
-            Cykl (kody zmian oddzielone spacją, W = wolne; dostępne: {state.shiftDefs.map((s) => s.code).join(', ')})
+            {t('Cykl (kody zmian oddzielone spacją, W = wolne; dostępne: {codes})', { codes: state.shiftDefs.map((s) => s.code).join(', ') })}
             <input
               defaultValue={p.sequence.join(' ')}
               onBlur={(e) => {
                 const seq = e.target.value.trim().split(/\s+/).filter(Boolean);
                 const valid = seq.length > 0 && seq.every((c) => c === OFF || state.shiftDefs.some((s) => s.code === c));
                 if (!valid) {
-                  alert('Nieznany kod zmiany w cyklu.');
+                  alert(t('Nieznany kod zmiany w cyklu.'));
                   e.target.value = p.sequence.join(' ');
                   return;
                 }
@@ -132,12 +133,12 @@ function ShiftsAndPatterns() {
           <div className="row">
             {BRIGADES.map((b) => (
               <label key={b} className="field" style={{ width: 90 }}>
-                Przesunięcie {b}
+                {t('Przesunięcie')} {b}
                 <input type="number" min={0} max={p.sequence.length - 1} value={p.offsets[b]} onChange={(e) => patchPattern(p.id, { offsets: { ...p.offsets, [b]: Number(e.target.value) || 0 } })} />
               </label>
             ))}
             <label className="field">
-              Początek cyklu
+              {t('Początek cyklu')}
               <input type="date" value={p.anchor} onChange={(e) => e.target.value && patchPattern(p.id, { anchor: e.target.value })} />
             </label>
           </div>
@@ -163,29 +164,29 @@ function Data() {
   const upload = async (file: File) => {
     try {
       const next = normalize(JSON.parse(await file.text()) as Partial<AppState>);
-      if (!confirm(`Zastąpić wszystkie dane zawartością pliku (${next.workers.length} pracowników, ${next.lines.length} linii)?`)) return;
+      if (!confirm(t('Zastąpić wszystkie dane zawartością pliku ({w} pracowników, {l} linii)?', { w: next.workers.length, l: next.lines.length }))) return;
       replaceAll(next);
     } catch {
-      alert('To nie jest poprawny plik kopii zapasowej.');
+      alert(t('To nie jest poprawny plik kopii zapasowej.'));
     }
   };
 
   return (
     <section className="card stack">
-      <h2>Dane</h2>
+      <h2>{t('Dane')}</h2>
       <div className="row">
         <button type="button" className="btn" onClick={download}>
-          Pobierz kopię (JSON)
+          {t('Pobierz kopię (JSON)')}
         </button>
         {admin && (
           <label className="btn">
-            Wczytaj kopię
+            {t('Wczytaj kopię')}
             <input type="file" accept="application/json" hidden onChange={(e) => e.target.files?.[0] && void upload(e.target.files[0])} />
           </label>
         )}
         {admin && state.workers.length === 0 && (
-          <button type="button" className="btn" onClick={() => confirm('Wgrać przykładowe linie i pracowników?') && replaceAll({ ...demoState(), history: state.history })}>
-            Wgraj dane przykładowe
+          <button type="button" className="btn" onClick={() => confirm(t('Wgrać przykładowe linie i pracowników?')) && replaceAll({ ...demoState(), history: state.history })}>
+            {t('Wgraj dane przykładowe')}
           </button>
         )}
         {backend.mode === 'demo' && (
@@ -193,12 +194,12 @@ function Data() {
             type="button"
             className="btn"
             onClick={() => {
-              if (!confirm('Przywrócić dane przykładowe? Twoje zmiany w trybie demo zostaną usunięte.')) return;
+              if (!confirm(t('Przywrócić dane przykładowe? Twoje zmiany w trybie demo zostaną usunięte.'))) return;
               resetDemo();
               location.reload();
             }}
           >
-            Przywróć demo
+            {t('Przywróć demo')}
           </button>
         )}
       </div>
@@ -210,7 +211,7 @@ export default function Ustawienia() {
   return (
     <>
       <div className="page-head">
-        <h1>Ustawienia</h1>
+        <h1>{t('Ustawienia')}</h1>
       </div>
       <Connection />
       <Access />

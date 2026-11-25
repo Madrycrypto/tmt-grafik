@@ -3,6 +3,7 @@ import { level } from '../domain/coverage';
 import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { Level, LineSelect, TypeTag, useLine } from '../ui';
+import { t } from '../i18n';
 
 export default function Matrix() {
   const { state, update } = useApp();
@@ -44,15 +45,15 @@ export default function Matrix() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">Kliknij poziom, aby go zmienić (0 → 1 → 2 → 3 → 4)</div>
-          <h1>Matrix kompetencji</h1>
+          <div className="sub">{t('Kliknij poziom, aby go zmienić (0 → 1 → 2 → 3 → 4)')}</div>
+          <h1>{t('Matrix kompetencji')}</h1>
         </div>
         <div className="row">
           <LineSelect state={state} value={lineId} onChange={setLineId} />
           <label className="field">
-            Brygada
+            {t('Brygada')}
             <select value={brigade} onChange={(e) => setBrigade(e.target.value)}>
-              <option value="all">wszystkie</option>
+              <option value="all">{t('wszystkie')}</option>
               {BRIGADES.map((b) => (
                 <option key={b} value={b}>
                   {b}
@@ -61,8 +62,8 @@ export default function Matrix() {
             </select>
           </label>
           <label className="field">
-            Szukaj
-            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="nazwisko" />
+            {t('Szukaj')}
+            <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('nazwisko')} />
           </label>
         </div>
       </div>
@@ -72,27 +73,27 @@ export default function Matrix() {
           <div className="legend">
             {[1, 2, 3, 4].map((l) => (
               <span key={l} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                <Level value={l} /> {LEVEL_LABEL[l]}
+                <Level value={l} /> {t(LEVEL_LABEL[l])}
               </span>
             ))}
           </div>
           <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={others} onChange={(e) => setOthers(e.target.checked)} />
-            pokaż osoby z innych linii z kwalifikacjami
+            {t('pokaż osoby z innych linii z kwalifikacjami')}
           </label>
         </div>
         {stations.length === 0 ? (
-          <div className="empty">Ta linia nie ma stanowisk.</div>
+          <div className="empty">{t('Ta linia nie ma stanowisk.')}</div>
         ) : (
           <div className="scroll-x">
             <table style={{ minWidth: 200 + stations.length * 88 }}>
               <thead>
                 <tr>
-                  <th className="sticky-col">Pracownik</th>
+                  <th className="sticky-col">{t('Pracownik')}</th>
                   {stations.map((s) => (
                     <th key={s.id} style={{ textAlign: 'center', whiteSpace: 'normal', minWidth: 90 }}>
                       {s.name}
-                      <div style={{ fontWeight: 400 }}>min. {s.minLevel}</div>
+                      <div style={{ fontWeight: 400 }}>{t('min.')} {s.minLevel}</div>
                     </th>
                   ))}
                 </tr>
@@ -102,20 +103,20 @@ export default function Matrix() {
                   <tr key={w.id}>
                     <td className="sticky-col">
                       <div style={{ fontWeight: 600 }}>{w.name}</div>
-                      <TypeTag w={w} /> <span className="sub">bryg. {w.brigade} · {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}</span>
+                      <TypeTag w={w} /> <span className="sub">{t('bryg.')} {w.brigade} · {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}</span>
                       {w.lineId !== lineId && <span className="tag" style={{ marginLeft: 4 }}>{state.lines.find((l) => l.id === w.lineId)?.name}</span>}
                     </td>
                     {stations.map((s) => (
                       <td key={s.id} style={{ textAlign: 'center', background: w.homeStationId === s.id ? 'var(--accent-soft)' : undefined }}>
-                        <Level value={level(w, s.id)} onClick={() => setLevel(w.id, s.id)} title={`${w.name} — ${s.name}: poziom ${level(w, s.id)}`} />
+                        <Level value={level(w, s.id)} onClick={() => setLevel(w.id, s.id)} title={`${w.name} — ${s.name}: ${t('Poziom')} ${level(w, s.id)}`} />
                       </td>
                     ))}
                   </tr>
                 ))}
                 <tr style={{ background: '#f7f8fa' }}>
                   <td className="sticky-col" style={{ fontWeight: 700, background: '#f7f8fa' }}>
-                    Osoby z poz. ≥ min
-                    <div className="sub" style={{ fontWeight: 400 }}>{brigade === 'all' ? `${BRIGADES.filter((b) => people.some((w) => w.brigade === b)).join(' · ')} (cel: min. 2)` : 'cel: min. 2'}</div>
+                    {t('Osoby z poz. ≥ min')}
+                    <div className="sub" style={{ fontWeight: 400 }}>{brigade === 'all' ? `${BRIGADES.filter((b) => people.some((w) => w.brigade === b)).join(' · ')} (${t('cel: min. 2')})` : t('cel: min. 2')}</div>
                   </td>
                   {stations.map((s) => {
                     const c = coverage(s.id, s.minLevel);
@@ -134,7 +135,7 @@ export default function Matrix() {
             </table>
           </div>
         )}
-        <div className="sub" style={{ marginTop: 8 }}>Niebieskie tło = stanowisko macierzyste pracownika.</div>
+        <div className="sub" style={{ marginTop: 8 }}>{t('Niebieskie tło = stanowisko macierzyste pracownika.')}</div>
       </section>
     </>
   );
