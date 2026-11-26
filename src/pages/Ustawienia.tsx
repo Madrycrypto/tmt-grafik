@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useState } from 'react';
 import { fmtRange } from '../domain/dates';
 import { demoState } from '../domain/seed';
@@ -122,7 +123,7 @@ function ShiftsAndPatterns() {
                 const seq = e.target.value.trim().split(/\s+/).filter(Boolean);
                 const valid = seq.length > 0 && seq.every((c) => c === OFF || state.shiftDefs.some((s) => s.code === c));
                 if (!valid) {
-                  alert(t('Nieznany kod zmiany w cyklu.'));
+                  toast(t('Nieznany kod zmiany w cyklu.'), { tone: 'warn' });
                   e.target.value = p.sequence.join(' ');
                   return;
                 }
@@ -167,7 +168,7 @@ function Data() {
       if (!confirm(t('Zastąpić wszystkie dane zawartością pliku ({w} pracowników, {l} linii)?', { w: next.workers.length, l: next.lines.length }))) return;
       replaceAll(next);
     } catch {
-      alert(t('To nie jest poprawny plik kopii zapasowej.'));
+      toast(t('To nie jest poprawny plik kopii zapasowej.'), { tone: 'warn' });
     }
   };
 

@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../data/AppContext';
-import { deletePunch, savePunch, usePunches } from '../data/punches';
+import { deletePunch, savePunch, savePunches, usePunches } from '../data/punches';
+import { toast } from '../toast';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { checkDay, DIR_LABEL, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { DayCheck, Punch } from '../domain/punches';
@@ -95,7 +96,7 @@ export default function Rcp() {
       update(() => undefined, `RCP ręcznie: ${row.worker.name} ${dir === 'in' ? 'wejście' : 'wyjście'} ${day} ${hhmm}`);
       await reload();
     } catch (e) {
-      alert((e as Error).message);
+      toast((e as Error).message, { tone: 'warn' });
     }
   };
 
@@ -103,29 +104,41 @@ export default function Rcp() {
     const todo = list.flatMap((r) => planPunches(r).map((p) => ({ r, p })));
     if (!todo.length) return;
     try {
-      for (const { p } of todo) {
-        const hh = fmtMin(p.min);
-        await savePunch(backend.client, { ...p, id: crypto.randomUUID(), at: new Date(`${p.date}T${hh}:00`).toISOString() });
-      }
+      const made: Punch[] = todo.map(({ p }) => ({ ...p, id: crypto.randomUUID(), at: new Date(`${p.date}T${fmtMin(p.min)}:00`).toISOString() }));
+      await savePunches(backend.client, made);
       const names = [...new Set(todo.map((x) => x.r.worker.name))];
       update(() => undefined, `RCP zatwierdzono wg grafiku (${date}): ${names.join(', ')}`);
       await reload();
+      toast(names.length === 1 ? t('Zatwierdzono wg grafiku: {name}', { name: names[0] }) : t('Zatwierdzono wg grafiku: {n} os.', { n: names.length }), {
+        undo: async () => {
+          for (const p of made) await deletePunch(backend.client, p.id);
+          update(() => undefined, `RCP cofnięto zatwierdzenie wg grafiku (${date}): ${names.join(', ')}`);
+          await reload();
+        },
+      });
     } catch (e) {
-      alert((e as Error).message);
+      toast((e as Error).message, { tone: 'warn' });
     }
   };
   const fixable = rows.filter((r) => planPunches(r).length > 0);
 
   const remove = async (row: DayCheck, p: Punch) => {
-    if (!confirm(t('Usunąć odbicie {d} {h}?', { d: p.date, h: fmtMin(p.min) }))) return;
     try {
       await deletePunch(backend.client, p.id);
       update(() => undefined, `RCP usunięto: ${row.worker.name} ${p.dir === 'in' ? 'wejście' : 'wyjście'} ${p.date} ${fmtMin(p.min)} (${p.source})`);
       await reload();
+      toast(t('Usunięto odbicie {name} {h}', { name: row.worker.name, h: fmtMin(p.min) }), {
+        undo: async () => {
+          await savePunch(backend.client, p);
+          update(() => undefined, `RCP przywrócono: ${row.worker.name} ${p.date} ${fmtMin(p.min)}`);
+          await reload();
+        },
+      });
     } catch (e) {
-      alert((e as Error).message);
+      toast((e as Error).message, { tone: 'warn' });
     }
   };
+
 
   return (
     <>
@@ -188,9 +201,7 @@ export default function Rcp() {
               type="button"
               className="btn small primary"
               title={t('Wpisuje brakujące wejścia i wyjścia o godzinach z grafiku')}
-              onClick={() => {
-                if (confirm(t('Zatwierdzić wg grafiku {n} os. bez kompletnych odbić?', { n: fixable.length }) + '\n\n' + fixable.map((r) => r.worker.name).join(', '))) void confirmPlan(fixable);
-              }}
+              onClick={() => void confirmPlan(fixable)}
             >
               ✓ {t('Zatwierdź wg grafiku wszystkich ({n})', { n: fixable.length })}
             </button>

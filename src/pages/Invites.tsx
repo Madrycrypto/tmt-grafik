@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useCallback, useEffect, useState } from 'react';
 import qrcode from 'qrcode-generator';
 import type { SupabaseClient } from '@supabase/supabase-js';
@@ -132,7 +133,7 @@ ol { padding-left: 4mm; margin: 2mm 0; font-size: 8pt; } .url { font-size: 7.5pt
 </style></head><body><div class="grid">${cards}</div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`;
   const win = window.open('', '_blank');
   if (!win) {
-    alert(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'));
+    toast(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'), { tone: 'warn' });
     return;
   }
   win.document.write(html);
@@ -175,7 +176,7 @@ body { margin: 0; font-family: Arial, 'Microsoft YaHei', 'PingFang SC', sans-ser
 </style></head><body><div class="grid">${cards}</div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`;
   const win = window.open('', '_blank');
   if (!win) {
-    alert(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'));
+    toast(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'), { tone: 'warn' });
     return;
   }
   win.document.write(html);

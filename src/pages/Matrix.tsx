@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { level } from '../domain/coverage';
 import { autoAssign } from '../domain/autoAssign';
@@ -8,7 +9,7 @@ import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
 
 export default function Matrix() {
-  const { state, update } = useApp();
+  const { state, update, undo } = useApp();
   const [lineId, setLineId] = useLine(state);
   const [brigade, setBrigade] = useState<string>('all');
   const [others, setOthers] = useState(false);
@@ -74,10 +75,10 @@ export default function Matrix() {
     }
     if (!changes.length) return;
     const name = (id: string) => lineStations.find((st) => st.id === id)?.name ?? '?';
-    if (!confirm(t('Zmienić stanowisko macierzyste?') + '\n\n' + changes.map((c) => `${c.name} → ${name(c.to)}`).join('\n'))) return;
     update((d) => {
       for (const c of changes) d.workers.find((x) => x.id === c.id)!.homeStationId = c.to;
     }, 'Stanowiska macierzyste wg matrycy: ' + changes.map((c) => `${c.name} → ${name(c.to)}`).join('; '));
+    toast(t('Zmieniono stanowisko macierzyste: {n} os.', { n: changes.length }), { undo });
   };
 
   return (

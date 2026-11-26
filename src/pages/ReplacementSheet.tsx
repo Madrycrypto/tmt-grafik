@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { addAbsence, applyVariant, describeStep, lineName, setAssignment, stationName } from '../domain/actions';
 import { level, plannedShift, roster } from '../domain/coverage';
@@ -31,7 +32,7 @@ function badge(v: Variant): string {
 }
 
 export default function ReplacementSheet({ target, onClose }: { target: SheetTarget; onClose: () => void }) {
-  const { state, update, user } = useApp();
+  const { state, update, user, undo } = useApp();
   const [reason, setReason] = useState<AbsenceReason>('L4');
   const [picked, setPicked] = useState(0);
   const [manual, setManual] = useState('');
@@ -83,8 +84,10 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
   const assignManual = () => {
     const opt = manualOptions.find((o) => o.w.id === manual);
     if (!opt) return;
-    if (opt.lv < station.minLevel && !confirm(t('{name} ma poziom {lv} (wymagany {min}). Przypisać mimo to?', { name: opt.w.name, lv: opt.lv, min: station.minLevel }))) return;
-    if (opt.rest && !opt.rest.ok && !confirm(t('{name}: brak 11 h odpoczynku (przed: {before} h, po: {after} h). Przypisać mimo to?', { name: opt.w.name, before: opt.rest.before, after: opt.rest.after }))) return;
+    const warn = [
+      opt.lv < station.minLevel ? t('{name} ma poziom {lv} (wymagany {min})', { name: opt.w.name, lv: opt.lv, min: station.minLevel }) : '',
+      opt.rest && !opt.rest.ok ? t('brak 11 h odpoczynku (przed: {before} h, po: {after} h)', { before: opt.rest.before, after: opt.rest.after }) : '',
+    ].filter(Boolean);
     update(
       (d) => {
         if (target.absent) addAbsence(d, target.absent.id, target.date, reason);
@@ -100,6 +103,7 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
       },
       `${target.absent ? `Brak: ${target.absent.name} (${reason}). ` : ''}Ręcznie: ${opt.w.name} → ${station.name} (${lineName(state, target.lineId)})`,
     );
+    toast(warn.length ? t('Przypisano mimo uwag: {w}', { w: warn.join('; ') }) : t('Przypisano'), { undo, tone: warn.length ? 'warn' : 'ok' });
     onClose();
   };
 

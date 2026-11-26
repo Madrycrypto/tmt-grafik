@@ -320,3 +320,10 @@ button.cell { cursor: pointer; }
 :root[data-theme='dark'] .qr-box, :root[data-theme='dark'] .qr-mini { background: #fff; border-radius: 10px; }
 :root[data-theme='dark'] .kiosk-qr { background: #fff; color: #16181d; }
 :root[data-theme='dark'] .kiosk-private-qr { color: #2b2100; }
+
+/* pasek „zrobione · Cofnij” */
+.toast { position: fixed; left: 50%; transform: translateX(-50%); bottom: 24px; z-index: 300; display: flex; align-items: center; gap: 12px; background: #1b2230; color: #fff; padding: 10px 10px 10px 16px; border-radius: 12px; box-shadow: 0 8px 28px rgba(0, 0, 0, 0.25); font-size: 14px; max-width: min(640px, calc(100vw - 24px)); animation: kflash 0.2s ease-out; }
+.toast.warn { background: #5a3d00; }
+.toast-undo { background: #fff; color: #1b2230; border: 0; border-radius: 8px; padding: 7px 14px; font-weight: 700; cursor: pointer; }
+.toast-x { background: transparent; border: 0; color: #9eabc2; font-size: 18px; cursor: pointer; padding: 0 4px; }
+@media (max-width: 860px) { .toast { bottom: calc(80px + env(safe-area-inset-bottom)); } }

@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
 import { plannedShift, absenceOn } from '../domain/coverage';
@@ -35,7 +36,7 @@ function WorkerForm({
   onInvite?: (w: Worker) => void;
   onRevoke?: (w: Worker) => void;
 }) {
-  const { state, update } = useApp();
+  const { state, update, undo } = useApp();
   const [w, setW] = useState<Worker>(initial);
   const isNew = !state.workers.some((x) => x.id === initial.id);
   const stations = state.stations.filter((s) => s.lineId === w.lineId);
@@ -56,12 +57,12 @@ function WorkerForm({
   };
 
   const remove = () => {
-    if (!confirm(t('Usunąć {name} razem z jego matrycą? Zamiast tego możesz oznaczyć go jako nieaktywnego.', { name: w.name }))) return;
     update((d) => {
       d.workers = d.workers.filter((x) => x.id !== w.id);
       d.assignments = d.assignments.filter((a) => a.workerId !== w.id);
       d.absences = d.absences.filter((a) => a.workerId !== w.id);
     }, `Usunięto pracownika: ${w.name}`);
+    toast(t('Usunięto: {name}', { name: w.name }), { undo });
     onClose();
   };
 

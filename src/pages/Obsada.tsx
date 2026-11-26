@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { setAssignment, setCombined, setDayHours, stationName } from '../domain/actions';
 import { lineStatus, level } from '../domain/coverage';
@@ -89,7 +90,7 @@ function PersonRow({ e, at, names, onAbsent, onUndo, onHours, onUncombine, moveT
 }
 
 export default function Obsada() {
-  const { state, update } = useApp();
+  const { state, update, undo } = useApp();
   const [lineId, setLineId] = useLine(state);
   const [date, setDate] = useState(todayIso());
   const [code, setCode] = useState(() => currentWindowCode(state));
@@ -173,7 +174,7 @@ export default function Obsada() {
     const plan = autoAssign(people.map((e) => e.worker), stations, current);
     const moves = plan.filter((p) => p.stationId !== current.get(p.workerId));
     if (!moves.length) {
-      alert(t('Nic do zmiany — ludzie już stoją tam, gdzie mają kwalifikacje.'));
+      toast(t('Nic do zmiany — ludzie już stoją tam, gdzie mają kwalifikacje.'));
       return;
     }
     const byId = new Map(people.map((e) => [e.worker.id, e]));
@@ -183,13 +184,14 @@ export default function Obsada() {
         setAssignment(d, { date: e.shift.date, workerId: m.workerId, lineId, stationId: m.stationId, source: 'manual' });
       }
     }, `Rozstawienie wg matrycy (${date}): ` + moves.map((m) => `${byId.get(m.workerId)!.worker.name} → ${stationName(state, m.stationId)}`).join('; '));
+    toast(t('Rozstawiono wg matrycy: {n} os. przeniesiono', { n: moves.length }), { undo });
   };
 
   const resetDay = () => {
-    if (!confirm(t('Usunąć wszystkie ręczne przesunięcia i dodatkowe zmiany na tej linii w tym dniu? Nieobecności zostaną.'))) return;
     update((d) => {
       d.assignments = d.assignments.filter((a) => !(a.date === date && a.lineId === lineId));
     }, `Przywrócono plan dnia ${date} (${state.lines.find((l) => l.id === lineId)?.name})`);
+    toast(t('Przywrócono plan dnia (nieobecności zostały)'), { undo });
   };
 
   const hourCells = (s: StationStatus) => (

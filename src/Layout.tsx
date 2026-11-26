@@ -2,6 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from './data/AppContext';
 import { Icon, LangSwitch, ThemeSwitch, usePersistent } from './ui';
 import { t } from './i18n';
+import { ToastHost } from './toast';
 
 export const NAV = [
   { to: '/', label: 'Obsada', icon: 'obsada', mobile: true },
@@ -100,6 +101,7 @@ export default function Layout() {
       <main className="main">
         <Outlet />
       </main>
+      <ToastHost />
       <nav className="bottom-nav" aria-label={t('Menu')}>
         {NAV.filter((n) => n.mobile).map((n) => (
           <NavLink key={n.to} to={n.to} end={n.to === '/'}>

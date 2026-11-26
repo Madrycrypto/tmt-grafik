@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useState } from 'react';
 import { uid } from '../domain/actions';
 import { patternBrigades } from '../domain/types';
@@ -72,7 +73,7 @@ export default function Linie() {
 }
 
 function LineCard({ lineId }: { lineId: string }) {
-  const { state, update } = useApp();
+  const { state, update, undo } = useApp();
   const line = state.lines.find((l) => l.id === lineId)!;
   const stations = state.stations.filter((s) => s.lineId === lineId).sort((a, b) => a.order - b.order);
   const [name, setName] = useState('');
@@ -108,7 +109,6 @@ function LineCard({ lineId }: { lineId: string }) {
   };
 
   const removeStation = (s: Station) => {
-    if (!confirm(t('Usunąć stanowisko „{name}”? Osoby z tym stanowiskiem macierzystym trafią do rezerwy.', { name: s.name }))) return;
     update((d) => {
       d.stations = d.stations.filter((x) => x.id !== s.id);
       for (const w of d.workers) {
@@ -140,9 +140,8 @@ function LineCard({ lineId }: { lineId: string }) {
     const who = state.workers.filter((w) => w.lineId === lineId && w.active && !chosen.includes(w.patternId));
     const moved = who.filter((w) => !brig.includes(w.brigade));
     const msg = moved.length
-      ? '\n\n' + t('{n} os. jest w brygadach, których ten system nie ma ({list}) — trafią do brygady {b}.', { n: moved.length, list: [...new Set(moved.map((w) => w.brigade))].join(', '), b: brig[0] })
+      ? ' ' + t('{n} os. jest w brygadach, których ten system nie ma ({list}) — trafią do brygady {b}.', { n: moved.length, list: [...new Set(moved.map((w) => w.brigade))].join(', '), b: brig[0] })
       : '';
-    if (!confirm(t('Przenieść {n} os. z linii {line} do systemu „{system}”?', { line: line.name, n: who.length, system: p.name }) + '\n\n' + who.map((w) => w.name).join(', ') + msg)) return;
     const ids = new Set(who.map((w) => w.id));
     update((d) => {
       for (const w of d.workers) {
@@ -151,15 +150,16 @@ function LineCard({ lineId }: { lineId: string }) {
         if (!brig.includes(w.brigade)) w.brigade = brig[0];
       }
     }, `${line.name}: ${who.length} os. przeniesiono do systemu ${p.name}`);
+    toast(t('Przeniesiono {n} os. do systemu „{s}”.', { n: who.length, s: p.name }) + msg, { undo });
   };
 
   const removeLine = () => {
-    if (crew > 0) return alert(t('Na linii jest {n} aktywnych pracowników. Najpierw przenieś ich na inną linię.', { n: crew }));
-    if (!confirm(t('Usunąć linię {name} i jej stanowiska?', { name: line.name }))) return;
+    if (crew > 0) return toast(t('Na linii jest {n} aktywnych pracowników. Najpierw przenieś ich na inną linię.', { n: crew }), { tone: 'warn' });
     update((d) => {
       d.lines = d.lines.filter((x) => x.id !== lineId);
       d.stations = d.stations.filter((x) => x.lineId !== lineId);
     }, `Usunięto linię ${line.name}`);
+    toast(t('Usunięto linię {name}', { name: line.name }), { undo });
   };
 
   return (

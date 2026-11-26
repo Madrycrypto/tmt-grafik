@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { applyImport, matchNames, parseDelimited, planImport, removeWorkers, workersCsv } from '../domain/workerImport';
 import type { Cell, ImportItem } from '../domain/workerImport';
@@ -179,6 +180,7 @@ export function RemoveListSheet({ onClose }: { onClose: () => void }) {
 }
 
 export function BulkButtons({ workers, onDone, update, small }: { workers: Worker[]; onDone: () => void; update: ReturnType<typeof useApp>['update']; small?: boolean }) {
+  const { undo } = useApp();
   const sz = small ? ' small' : '';
   const ids = new Set(workers.map((w) => w.id));
   const n = workers.length;
@@ -203,8 +205,8 @@ export function BulkButtons({ workers, onDone, update, small }: { workers: Worke
         className={'btn danger' + sz}
         disabled={!n}
         onClick={() => {
-          if (!confirm(t('Trwale usunąć {n} os. razem z matrycą, nieobecnościami i przypisaniami?', { n }) + `\n\n${names(10)}`)) return;
           update((d) => removeWorkers(d, ids), `Usunięto ${n} os.: ${names()}`);
+          toast(t('Usunięto {n} os.', { n }), { undo });
           onDone();
         }}
       >

@@ -1,3 +1,4 @@
+import { toast } from '../toast';
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { ReactNode } from 'react';
 import type { Session } from '@supabase/supabase-js';
@@ -154,7 +155,7 @@ export function AppProvider({
       const prev = stateRef.current;
       if (!prev) return;
       if (!canEdit) {
-        alert(t('Masz dostęp tylko do podglądu (rola: viewer).'));
+        toast(t('Masz dostęp tylko do podglądu (rola: viewer).'), { tone: 'warn' });
         return;
       }
       const draft = structuredClone(prev);
@@ -208,7 +209,7 @@ export function AppProvider({
       );
       to.push(entry);
       refreshUndo();
-      if (conflicts) alert(t('Część danych zmienił w międzyczasie ktoś inny — tych nie ruszano ({n}).', { n: conflicts }));
+      if (conflicts) toast(t('Część danych zmienił w międzyczasie ktoś inny — tych nie ruszano ({n}).', { n: conflicts }), { tone: 'warn' });
     },
     [commit],
   );
