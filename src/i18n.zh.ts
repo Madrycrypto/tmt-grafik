@@ -744,4 +744,7 @@ export const zh: Record<string, string> = {
   'Połącz i sprawdź': '连接并检查',
   'Wgraj plik z odbiciami z czytnika Comarch TNA (gdy API nie działa)': '上传 Comarch TNA 打卡文件（API 不可用时）',
   'Import z pliku': '从文件导入',
+  'Błąd zapisu': '保存失败',
+  'Zwiń menu': '收起菜单',
+  'Rozwiń menu': '展开菜单',
 };

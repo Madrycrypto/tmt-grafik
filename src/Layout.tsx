@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from './data/AppContext';
-import { Icon, LangSwitch } from './ui';
+import { Icon, LangSwitch, usePersistent } from './ui';
 import { t } from './i18n';
 
 export const NAV = [
@@ -21,12 +21,12 @@ function SyncBadge({ dark }: { dark?: boolean }) {
   if (sync === 'error')
     return (
       <span className="sync" style={{ color: '#ff8a8a' }} title={syncError ?? ''}>
-        {t('● Błąd zapisu')}
+        ● <span className="sync-text">{t('Błąd zapisu')}</span>
       </span>
     );
   return (
     <span className="sync" style={{ color }} title={t('Zmiany zapisują się automatycznie')}>
-      <span style={{ color: sync === 'saving' ? '#f5b74a' : '#6cc08f' }}>●</span> {sync === 'saving' ? t('Zapisywanie…') : t('Zsynchronizowano')}
+      <span style={{ color: sync === 'saving' ? '#f5b74a' : '#6cc08f' }}>●</span> <span className="sync-text">{sync === 'saving' ? t('Zapisywanie…') : t('Zsynchronizowano')}</span>
     </span>
   );
 }
@@ -49,22 +49,39 @@ function UndoButtons({ dark, compact }: { dark?: boolean; compact?: boolean }) {
 
 export default function Layout() {
   const { user } = useApp();
+  const [mini, setMini] = usePersistent('sidebar-mini', false);
   return (
     <div className="shell">
-      <aside className="sidebar" aria-label={t('Menu główne')}>
-        <div className="brand">{t('TMT Grafik')}</div>
-        <div className="brand-sub">{t('Brygady · Matrix · Zastępstwa')}</div>
+      <aside className={`sidebar ${mini ? 'mini' : ''}`} aria-label={t('Menu główne')}>
+        <div className="side-head">
+          {!mini && (
+            <div>
+              <div className="brand">{t('TMT Grafik')}</div>
+              <div className="brand-sub">{t('Brygady · Matrix · Zastępstwa')}</div>
+            </div>
+          )}
+          <button
+            type="button"
+            className="side-toggle"
+            aria-label={mini ? t('Rozwiń menu') : t('Zwiń menu')}
+            aria-expanded={!mini}
+            title={mini ? t('Rozwiń menu') : t('Zwiń menu')}
+            onClick={() => setMini(!mini)}
+          >
+            {mini ? '»' : '«'}
+          </button>
+        </div>
         {NAV.map((n) => (
-          <NavLink key={n.to} to={n.to} end={n.to === '/'} className="nav-link">
+          <NavLink key={n.to} to={n.to} end={n.to === '/'} className="nav-link" title={mini ? t(n.label) : undefined} aria-label={mini ? t(n.label) : undefined}>
             <Icon name={n.icon} />
-            {t(n.label)}
+            {!mini && t(n.label)}
           </NavLink>
         ))}
         <div className="side-foot">
-          <UndoButtons dark />
-          <LangSwitch dark />
+          <UndoButtons dark compact={mini} />
+          {!mini && <LangSwitch dark />}
           <SyncBadge dark />
-          <span>{user}</span>
+          {!mini && <span>{user}</span>}
         </div>
       </aside>
       <header className="mobile-top">
