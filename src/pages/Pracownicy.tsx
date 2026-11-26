@@ -1,3 +1,4 @@
+import { appUrl } from '../data/backend';
 import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
@@ -44,6 +45,7 @@ function WorkerForm({
   const systems = linePatterns(state, w.lineId);
   const systemOptions = systems.some((p) => p.id === w.patternId) ? systems : [...systems, ...state.patterns.filter((p) => p.id === w.patternId)];
   const brigadeOptions = patternBrigades(state.patterns.find((p) => p.id === w.patternId));
+  const emailOk = /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(w.email?.trim() ?? '');
 
   const save = () => {
     if (!w.name.trim()) return;
@@ -187,34 +189,63 @@ function WorkerForm({
         {t('aktywny (nieaktywni nie są planowani)')}
       </label>
       {!isNew && onInvite && (
-        <div className="note stack" style={{ gap: 6 }}>
-          <b>{t('Aplikacja na telefon')}</b>
-          {account ? (
-            account.code ? (
-              <span>
-                {t('Zaproszony')} ({account.email}) · {t('Kod aktywacyjny')}: <b style={{ fontFamily: 'monospace', letterSpacing: 2 }}>{account.code}</b>
+        <div className="note stack" style={{ gap: 8 }}>
+          <label className="switch-row">
+            <span className="grow">
+              <b>{t('Aplikacja na telefon')}</b>
+              <span className="sub" style={{ display: 'block' }}>
+                {account
+                  ? account.code
+                    ? `${t('Zaproszony')} · ${t('Kod aktywacyjny')}: ${account.code}`
+                    : `${t('Ma konto w aplikacji')} (${account.email})`
+                  : emailOk
+                    ? t('Wyłączona — włącz, a wydrukuje się kartka z kodem dla pracownika.')
+                    : t('Wpisz e-mail powyżej, potem włącz.')}
               </span>
-            ) : (
-              <span>{t('Ma konto w aplikacji')} ({account.email})</span>
-            )
-          ) : (
-            <span>{w.email ? t('Jeszcze nie zaproszony.') : t('Wpisz e-mail i zapisz, potem zaproś.')}</span>
-          )}
-          <div className="row">
-            <button type="button" className="btn small primary" disabled={!initial.email || initial.email !== w.email?.trim().toLowerCase()} onClick={() => onInvite(initial)}>
-              {account ? t('Nowy kod + kartka') : t('Zaproś + kartka')}
-            </button>
-            {account && onRevoke && (
-              <button type="button" className="btn small" onClick={() => confirm(t('Odebrać dostęp {email}?', { email: account.email })) && onRevoke(initial)}>
-                {t('Odbierz dostęp')}
+            </span>
+            <input
+              type="checkbox"
+              role="switch"
+              className="switch"
+              aria-label={t('Aplikacja na telefon')}
+              checked={!!account}
+              disabled={!account && !emailOk}
+              onChange={(e) => {
+                if (e.target.checked) {
+                  const email = w.email!.trim().toLowerCase();
+                  // e-mail zapisuje się razem z włączeniem — bez osobnego „Zapisz”
+                  if (email !== initial.email) update((d) => void (d.workers.find((x) => x.id === w.id)!.email = email), `E-mail pracownika ${w.name}: ${email}`);
+                  onInvite({ ...initial, ...w, email });
+                } else if (onRevoke && confirm(t('Odebrać dostęp {email}?', { email: account!.email }))) onRevoke(initial);
+              }}
+            />
+          </label>
+          <div className="row" style={{ alignItems: 'center' }}>
+            <a className="btn small" href={`#/podglad/${initial.id}`}>
+              👁 {t('Podgląd aplikacji pracownika')}
+            </a>
+            {account?.code && (
+              <button type="button" className="btn small" onClick={() => onInvite(initial)}>
+                {t('Nowy kod + kartka')}
               </button>
             )}
+            <button
+              type="button"
+              className="btn small ghost"
+              title={appUrl()}
+              onClick={() => {
+                const link = account?.code ? `${appUrl()}?kod=${account.code}&e=${encodeURIComponent(account.email)}` : appUrl();
+                void navigator.clipboard?.writeText(link).then(() => toast(t('Skopiowano link do aplikacji')));
+              }}
+            >
+              🔗 {t('Kopiuj link do aplikacji')}
+            </button>
           </div>
         </div>
       )}
-      {!isNew && (
+      {!isNew && !onInvite && (
         <a className="btn small" href={`#/podglad/${initial.id}`}>
-          {t('Podgląd aplikacji pracownika')}
+          👁 {t('Podgląd aplikacji pracownika')}
         </a>
       )}
       {!isNew && <WorkerAbsences worker={w} />}

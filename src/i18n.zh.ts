@@ -765,4 +765,8 @@ export const zh: Record<string, string> = {
   'Zatwierdzono wg grafiku: {n} os.': '已按排班确认：{n} 人',
   'Usunięto odbicie {name} {h}': '已删除打卡 {name} {h}',
   'Rozstawiono wg matrycy: {n} os. przeniesiono': '已按技能矩阵分配：调动 {n} 人',
+  'Wyłączona — włącz, a wydrukuje się kartka z kodem dla pracownika.': '未开启——开启后将打印员工的激活码卡片。',
+  'Wpisz e-mail powyżej, potem włącz.': '请先在上方填写邮箱，然后开启。',
+  'Kopiuj link do aplikacji': '复制应用链接',
+  'Skopiowano link do aplikacji': '已复制应用链接',
 };
