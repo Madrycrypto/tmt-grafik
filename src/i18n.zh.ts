@@ -864,7 +864,6 @@ export const zh: Record<string, string> = {
   '1 miesiąc': '1个月',
   '12 miesięcy (rok)': '12个月（一年）',
   '{n} miesiące': '{n}个月',
-  'od': '从',
   'Okres rozliczeniowy: {n} mies.': '结算周期：{n}个月',
   'Pierwszy miesiąc okresu — od niego liczą się kolejne okresy': '周期的第一个月——后续周期从此计算',
   'wymiar w okresie: {h} h · w tym miesiącu {m} h': '周期内标准工时：{h} 小时 · 本月 {m} 小时',
