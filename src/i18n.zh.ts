@@ -619,4 +619,10 @@ export const zh: Record<string, string> = {
   'Wpisz brakujące odbicia o godzinach z grafiku': '按排班时间补录缺失打卡',
   'wg grafiku': '按排班',
   'zatwierdzone wg grafiku': '按排班确认',
+  'Pozostałe linie': '其他产线',
+  'Kliknij grupę, aby ją rozwinąć — pozostałe się zwiną.': '点击分组展开，其他分组会自动收起。',
+  '{n} os. tej linii pracuje w systemie, którego nie zaznaczono.': '本线有 {n} 人使用未勾选的班制。',
+  'Przenieś do: {s}': '移至：{s}',
+  'Przenieść {n} os. z linii {line} do systemu „{system}”?': '将 {line} 的 {n} 人移至班制「{system}」？',
+  'Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.': '新班制（例如两班 06–14 / 14–22）可在 设置 → 班制 中添加。',
 };

@@ -5,6 +5,7 @@ import { canPair } from '../domain/types';
 import type { Station } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { t } from '../i18n';
+import { usePersistent } from '../ui';
 
 export default function Linie() {
   const { state, update } = useApp();
@@ -18,6 +19,18 @@ export default function Linie() {
     }, `Dodano linię: ${name}`);
     setNewLine('');
   };
+
+  const groups = [...state.lines]
+    .sort((a, b) => a.name.localeCompare(b.name))
+    .reduce<[string, typeof state.lines][]>((acc, l) => {
+      const g = l.group ?? '';
+      const hit = acc.find((x) => x[0] === g);
+      if (hit) hit[1].push(l);
+      else acc.push([g, [l]]);
+      return acc;
+    }, [])
+    .sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0]));
+  const [open, setOpen] = usePersistent('linie-open', groups[0]?.[0] ?? '');
 
   return (
     <>
@@ -36,15 +49,24 @@ export default function Linie() {
           </button>
         </div>
       </div>
+      {state.lines.length > 0 && groups.length > 1 && <div className="sub">{t('Kliknij grupę, aby ją rozwinąć — pozostałe się zwiną.')}</div>}
       {state.lines.length === 0 && <div className="card empty">{t('Brak linii. Dodaj pierwszą powyżej.')}</div>}
-      {[...state.lines]
-        .sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.name.localeCompare(b.name))
-        .map((l, i, arr) => (
-          <div key={l.id} className="stack">
-            {l.group && l.group !== arr[i - 1]?.group && <h2 style={{ marginTop: 8 }}>{l.group}</h2>}
-            <LineCard lineId={l.id} />
-          </div>
-        ))}
+      {groups.map(([g, lines]) => {
+        const isOpen = open === g || groups.length === 1;
+        const people = state.workers.filter((w) => w.active && lines.some((l) => l.id === w.lineId)).length;
+        return (
+          <section key={g} className="stack">
+            <button type="button" className="group-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : g)}>
+              <span className="chev">{isOpen ? '▾' : '▸'}</span>
+              <h2>{g || t('Pozostałe linie')}</h2>
+              <span className="sub">
+                {lines.map((l) => l.name).join(', ')} · {people} {t('os.')}
+              </span>
+            </button>
+            {isOpen && lines.map((l) => <LineCard key={l.id} lineId={l.id} />)}
+          </section>
+        );
+      })}
     </>
   );
 }
@@ -114,19 +136,21 @@ function LineCard({ lineId }: { lineId: string }) {
     const p = state.patterns.find((x) => x.id === patternId);
     if (!p) return;
     const brig = patternBrigades(p);
-    const moved = state.workers.filter((w) => w.lineId === lineId && !brig.includes(w.brigade));
+    const chosen = line.patternIds?.length ? line.patternIds : [patternId];
+    const who = state.workers.filter((w) => w.lineId === lineId && w.active && !chosen.includes(w.patternId));
+    const moved = who.filter((w) => !brig.includes(w.brigade));
     const msg = moved.length
       ? '\n\n' + t('{n} os. jest w brygadach, których ten system nie ma ({list}) — trafią do brygady {b}.', { n: moved.length, list: [...new Set(moved.map((w) => w.brigade))].join(', '), b: brig[0] })
       : '';
-    if (!confirm(t('Przełączyć {line} ({n} os.) na „{system}”?', { line: line.name, n: crew, system: p.name }) + msg)) return;
+    if (!confirm(t('Przenieść {n} os. z linii {line} do systemu „{system}”?', { line: line.name, n: who.length, system: p.name }) + '\n\n' + who.map((w) => w.name).join(', ') + msg)) return;
+    const ids = new Set(who.map((w) => w.id));
     update((d) => {
-      d.lines.find((x) => x.id === lineId)!.patternIds = [patternId];
       for (const w of d.workers) {
-        if (w.lineId !== lineId) continue;
+        if (!ids.has(w.id)) continue;
         w.patternId = patternId;
         if (!brig.includes(w.brigade)) w.brigade = brig[0];
       }
-    }, `${line.name}: przełączono na system ${p.name} (${crew} os.)`);
+    }, `${line.name}: ${who.length} os. przeniesiono do systemu ${p.name}`);
   };
 
   const removeLine = () => {
@@ -194,26 +218,32 @@ function LineCard({ lineId }: { lineId: string }) {
                   }
                 />
                 {p.name}
+                {(() => {
+                  const n = state.workers.filter((w) => w.lineId === lineId && w.active && w.patternId === p.id).length;
+                  return n ? <b>· {n} {t('os.')}</b> : null;
+                })()}
               </label>
             );
           })}
         </div>
-        <div className="row" style={{ alignItems: 'flex-end' }}>
-          <label className="field">
-            {t('Przełącz całą linię na system')}
-            <select value="" onChange={(e) => e.target.value && switchSystem(e.target.value)}>
-              <option value="">{t('— wybierz —')}</option>
-              {state.patterns.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
+        {(() => {
+          const chosen = state.patterns.filter((p) => line.patternIds?.includes(p.id));
+          const outside = state.workers.filter((w) => w.lineId === lineId && w.active && chosen.length > 0 && !chosen.some((p) => p.id === w.patternId));
+          if (!outside.length) return null;
+          return (
+            <div className="note amber row" style={{ alignItems: 'center', gap: 8 }}>
+              <span>
+                {t('{n} os. tej linii pracuje w systemie, którego nie zaznaczono.', { n: outside.length })}
+              </span>
+              {chosen.map((p) => (
+                <button key={p.id} type="button" className="btn small primary" onClick={() => switchSystem(p.id)}>
+                  {t('Przenieś do: {s}', { s: p.name })}
+                </button>
               ))}
-            </select>
-          </label>
-          <span className="sub" style={{ paddingBottom: 10 }}>
-            {t('Ustawia system linii i przenosi do niego wszystkich jej pracowników. Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.')}
-          </span>
-        </div>
+            </div>
+          );
+        })()}
+        <span className="sub">{t('Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.')}</span>
       </div>
       <div className="scroll-x">
         <table style={{ minWidth: 560 }}>
