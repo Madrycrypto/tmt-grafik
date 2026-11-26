@@ -75,6 +75,16 @@ Bezpieczeństwo: kod tabletu zmienia się co 20 s i jest podpisany przez serwer 
 
 Odbicia: tabela `records` (kind = `punches`), karty: tabela `badges` (bez dostępu z aplikacji). Schemat: `supabase/schema-rcp.sql`, logika: `src/domain/punches.ts`.
 
+### Czytnik Comarch TNA na żywo (API)
+
+Odbicia z istniejących czytników Comarch TNA trafiają do RCP **automatycznie co minutę** przez oficjalne Public API (`https://tna.comarch.com/public-api/`):
+
+1. W TNA (administrator): **Ustawienia → API → Generuj nowy klucz API**, uprawnienia: *Zarządzanie pracownikami — Odczyt*, *Historia pracowników — Odczyt*.
+2. W aplikacji: **RCP → „Połącz z Comarch TNA”** → wklej identyfikator klucza i klucz → „Połącz i sprawdź”. Klucz zostaje tylko na serwerze (tabela `app_secrets`).
+3. Konta TNA łączą się z pracownikami po e-mailu i nazwisku; resztę wskazujesz w tym samym oknie („kto to?”).
+
+Działanie: zadanie `pg_cron` co minutę wywołuje funkcję `tmt-api` (akcja `tna_sync`, nagłówek `x-cron-key` z sejfu), która pobiera `/api/v2/history` z ostatnich 2 dni i dopisuje tylko nowe odbicia (ręczne poprawki w RCP nie są nadpisywane). Gdy API nie działa, zostaje **Import z pliku** (raport aktywności pracowników).
+
 ## Wymiar czasu pracy i dopełnianie godzin
 
 Grafik pokazuje **wymiar czasu pracy** miesiąca (KP art. 130) i bilans każdej brygady (np. −16 h przez niepracujące niedziele). **Dopełnij godziny** proponuje dodatkowe zmiany na innych liniach: tylko w dni wolne, na stanowiskach z luką, z kwalifikacją ≥ min i 11 h odpoczynku. **Matrix → Zakres: cały zakład** pokazuje kwalifikacje na wszystkich liniach.
