@@ -81,7 +81,8 @@ export default function Kiosk() {
         setToken(data.token);
         tokenAt.current = Date.now();
       }
-      const list = data.recent ?? [];
+      // odbicia z przyszłości (np. błędnie zatwierdzone wg grafiku) nie są „ostatnie”
+      const list = (data.recent ?? []).filter((r) => Date.parse(r.at) <= Date.now() + 60_000);
       // odbicie z telefonu (nie z kamery tabletu): też pokaż duży kolorowy ekran
       if (seen.current) {
         const fresh = list.find((r) => !seen.current!.has(r.id) && !mine.current.has(r.id));

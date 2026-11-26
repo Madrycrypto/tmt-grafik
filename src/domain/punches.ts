@@ -173,15 +173,16 @@ export const FIXABLE: DayStatus[] = ['missing', 'no_in', 'no_out'];
  * Brakujące odbicia wg grafiku: wejście o początku zmiany, wyjście o jej końcu
  * (nocka kończy się następnego dnia). Zwraca puste, gdy nic nie brakuje.
  */
-export function planPunches(r: DayCheck): Omit<Punch, 'id' | 'at'>[] {
+export function planPunches(r: DayCheck, now?: number): Omit<Punch, 'id' | 'at'>[] {
   if (!r.plan || r.absence || !FIXABLE.includes(r.status)) return [];
   const at = (h: number, dir: 'in' | 'out') => {
     const dayOff = Math.floor(h / 24);
     return { workerId: r.worker.id, date: addDays(r.date, dayOff), min: Math.round((h - dayOff * 24) * 60), dir, source: 'plan' as const };
   };
   const out: Omit<Punch, 'id' | 'at'>[] = [];
-  if (r.firstIn === undefined) out.push(at(r.plan.start, 'in'));
-  if (r.lastOut === undefined || (r.firstIn !== undefined && r.lastOut < r.firstIn)) out.push(at(r.plan.end, 'out'));
+  // now = bieżąca godzina względem północy dnia r.date; nie wpisujemy odbić z przyszłości
+  if (r.firstIn === undefined && (now === undefined || now >= r.plan.start)) out.push(at(r.plan.start, 'in'));
+  if ((r.lastOut === undefined || (r.firstIn !== undefined && r.lastOut < r.firstIn)) && (now === undefined || now >= r.plan.end)) out.push(at(r.plan.end, 'out'));
   return out;
 }
 

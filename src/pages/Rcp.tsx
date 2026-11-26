@@ -101,7 +101,7 @@ export default function Rcp() {
   };
 
   const confirmPlan = async (list: DayCheck[]) => {
-    const todo = list.flatMap((r) => planPunches(r).map((p) => ({ r, p })));
+    const todo = list.flatMap((r) => planPunches(r, nowH).map((p) => ({ r, p })));
     if (!todo.length) return;
     try {
       const made: Punch[] = todo.map(({ p }) => ({ ...p, id: crypto.randomUUID(), at: new Date(`${p.date}T${fmtMin(p.min)}:00`).toISOString() }));
@@ -120,7 +120,7 @@ export default function Rcp() {
       toast((e as Error).message, { tone: 'warn' });
     }
   };
-  const fixable = rows.filter((r) => planPunches(r).length > 0);
+  const fixable = rows.filter((r) => planPunches(r, nowH).length > 0);
 
   const remove = async (row: DayCheck, p: Punch) => {
     try {
@@ -257,7 +257,7 @@ export default function Rcp() {
                           )}
                         </span>
                       ))}
-                      {canEdit && planPunches(r).length > 0 && (
+                      {canEdit && planPunches(r, nowH).length > 0 && (
                         <button type="button" className="btn small primary" title={t('Wpisz brakujące odbicia o godzinach z grafiku')} onClick={() => void confirmPlan([r])}>
                           ✓ {t('wg grafiku')}
                         </button>

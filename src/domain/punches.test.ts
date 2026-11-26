@@ -118,4 +118,11 @@ describe('RCP: plan a odbicia', () => {
     // zapomniane wyjście: po 16 h następny skan to nowe wejście
     expect(decideDir(at('2026-12-01T06:00:00Z', 'in'), 'normal', '2026-12-02T06:00:00Z')).toEqual({ dir: 'in' });
   });
+
+  it('wg grafiku nie wpisuje wyjścia ze zmiany, która jeszcze trwa', () => {
+    const { s, w, day, start, end } = setup('p8', 7);
+    const r = checkDay(s, w, day, [], start + 2);
+    expect(planPunches(r, start + 2).map((p) => p.dir)).toEqual(['in']);
+    expect(planPunches(r, end + 1).map((p) => p.dir)).toEqual(['in', 'out']);
+  });
 });
