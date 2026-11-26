@@ -60,15 +60,26 @@ Bez skonfigurowanej bazy aplikacja działa w **trybie demo** na danych przykład
 - **Stanowiska macierzyste wg matrycy** — w Matrycy pasek ostrzega, gdy ktoś ma macierzyste stanowisko bez kwalifikacji, i proponuje poprawkę.
 - **Karta pracownika** — kliknięcie nazwiska w Matrycy lub Obsadzie.
 
-## RCP — kiosk QR (odbicia telefonem)
+## RCP — kiosk przy wejściu (odbicia bez klikania)
 
-1. **Tablet przy wejściu**: otwórz `…/tmt-grafik/#/kiosk` (np. ze strony RCP → „Otwórz kiosk”). Najlepiej na osobnym koncie z rolą **kiosk** (Ustawienia → Dostęp): takie konto widzi tylko ekran z kodem. Przycisk ⛶ włącza pełny ekran; ekran nie gaśnie.
-2. **Pracownik** skanuje kod aparatem telefonu, otwiera się aplikacja → „Wejście” / „Wyjście” (podpowiada właściwe). Kiosk od razu pokazuje nazwisko i godzinę.
-3. **Bezpieczeństwo**: kod zmienia się co 20 s i jest podpisany przez serwer (ważny 60 s), więc zdjęcie kodu nie zadziała w domu. Godzinę odbicia nadaje serwer, nie telefon. Drugie zeskanowanie w ciągu 2 min nie tworzy duplikatu. Pracownik nie może sam zapisać odbicia z pominięciem serwera.
-4. **Panel RCP** (menu „RCP — obecność”): grafik kontra odbicia — spóźnienia, wcześniejsze wyjścia, brak wejścia/wyjścia, praca poza grafikiem. Tolerancja 5 min; nocka kończy się następnego dnia. Kierownik może dodać lub usunąć odbicie ręcznie (✎), każda zmiana trafia do Historii.
-5. **Pracownik** widzi w aplikacji swoje odbicia z ostatnich 7 dni.
+Tablet przy wejściu otwiera `…/tmt-grafik/#/kiosk` (najlepiej konto z rolą **kiosk**, Ustawienia → Dostęp). Dwa sposoby odbicia, oba **samym skanem** — kierunek ustala serwer:
 
-Odbicia są w tabeli `records` (kind = `punches`); schemat: `supabase/schema-rcp.sql`, logika: `src/domain/punches.ts`.
+- **Telefon skanuje tablet**: w aplikacji „Odbij się — skanuj kod” (albo zwykły aparat). Mały **żółty** kod = wyjście prywatne.
+- **Tablet skanuje kartę** (jak w kioskach Calamari): karta RCP z kodem QR (Pracownicy → „Karty RCP”, wydruk w formacie karty) albo „Mój kod do tabletu” w telefonie. Wyjście prywatne: dotknąć żółtego przycisku, potem pokazać kartę.
+
+Wynik: pełny ekran **zielony** (wejście, powrót), **czerwony** (wyjście), **żółty** (wyjście prywatne), z godziną i nazwiskiem. „Pomyłka? Cofnij” przez 10 s (serwer pozwala do 2 min). Drugi skan w ciągu minuty nie tworzy duplikatu. W ciągu dnia może być wiele wyjść prywatnych — ich czas nie wlicza się do pracy.
+
+Bezpieczeństwo: kod tabletu zmienia się co 20 s i jest podpisany przez serwer (ważny 60 s); kod z telefonu pracownika tak samo; kod karty jest tajny, „Nowa karta” unieważnia zgubioną. Godzinę nadaje serwer.
+
+**Panel RCP** (menu „RCP — obecność”): plan a odbicia, spóźnienia, wcześniejsze wyjścia, brak odbić, poza grafikiem, wyjścia prywatne. **✓ wg grafiku** uzupełnia brakujące odbicia jednym kliknięciem (pojedynczo albo wszystkich naraz); ręczne odbicie zostaje na wypadek awarii.
+
+Odbicia: tabela `records` (kind = `punches`), karty: tabela `badges` (bez dostępu z aplikacji). Schemat: `supabase/schema-rcp.sql`, logika: `src/domain/punches.ts`.
+
+## Wymiar czasu pracy i dopełnianie godzin
+
+Grafik pokazuje **wymiar czasu pracy** miesiąca (KP art. 130) i bilans każdej brygady (np. −16 h przez niepracujące niedziele). **Dopełnij godziny** proponuje dodatkowe zmiany na innych liniach: tylko w dni wolne, na stanowiskach z luką, z kwalifikacją ≥ min i 11 h odpoczynku. **Matrix → Zakres: cały zakład** pokazuje kwalifikacje na wszystkich liniach.
+
+**3 zmiany lekkie** (Ustawienia → Systemy): 4 brygady pn–pt, maks. 3 nocki w tygodniu. Przy 3 brygadach pn–pt nie da się mieć mniej niż 5 nocek z rzędu (11 h odpoczynku), dlatego potrzebna jest czwarta brygada; średnio 38 h/tydz., resztę dopełnia się na innych liniach.
 
 ## Uruchomienie lokalnie
 
