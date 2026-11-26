@@ -1,3 +1,6 @@
+import { monthNorm } from '../domain/norm';
+import { hrSummary } from '../domain/hrExport';
+import WorkerHours from './WorkerHours';
 import { appUrl } from '../data/backend';
 import { toast } from '../toast';
 import { useMemo, useState } from 'react';
@@ -248,6 +251,7 @@ function WorkerForm({
           👁 {t('Podgląd aplikacji pracownika')}
         </a>
       )}
+      {!isNew && <WorkerHours worker={initial} />}
       {!isNew && <WorkerAbsences worker={w} />}
       <div className="row">
         <button type="button" className="btn primary grow" onClick={save} disabled={!w.name.trim()}>
@@ -414,6 +418,13 @@ export default function Pracownicy() {
     if (!r.badges) return setInviteInfo(t('Nie udało się pobrać kart: {e}', { e: r.error ?? '' }));
     printBadges(state, r.badges.map((b) => ({ worker: who.find((w) => w.id === b.workerId)!, qr: b.qr })));
   };
+
+  // bilans godzin w bieżącym miesiącu (ujemny = do odrobienia)
+  const balance = useMemo(() => {
+    const month = todayIso().slice(0, 7);
+    const norm = monthNorm(month).hours;
+    return new Map(hrSummary(state, { month, lineId: 'all', who: 'all', includeInactive: false }).map((r) => [r.worker.id, r.hours - norm]));
+  }, [state]);
 
   const list = useMemo(
     () =>
@@ -584,6 +595,11 @@ export default function Pracownicy() {
             {acc.enabled && w.email && !acc.accounts.has(w.id) && <span className="tag">{t('bez konta')}</span>}
             {acc.accounts.get(w.id)?.code && <span className="tag amber">{t('kod')}: {acc.accounts.get(w.id)!.code}</span>}
             {acc.accounts.has(w.id) && !acc.accounts.get(w.id)!.code && <span className="tag blue">{t('aplikacja')}</span>}
+            {(balance.get(w.id) ?? 0) < 0 && (
+              <span className="tag red" title={t('Brakuje godzin do wymiaru w tym miesiącu — otwórz kartę, aby dodać zmianę na innej linii')}>
+                {balance.get(w.id)} h
+              </span>
+            )}
             <span className="tag">{t('Bryg.')} {w.brigade}</span>
           </div>
         ))}

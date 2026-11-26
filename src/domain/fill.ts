@@ -35,7 +35,7 @@ export function deficits(state: AppState, month: string, workers?: Worker[]): Wo
 }
 
 /** Zmiany, które danego dnia faktycznie trwają na linii (wg systemów linii). */
-function lineWindows(state: AppState, lineId: string, date: string): { start: number; hours: number }[] {
+export function lineWindows(state: AppState, lineId: string, date: string): { start: number; hours: number }[] {
   const seen = new Map<string, { start: number; hours: number }>();
   for (const p of linePatterns(state, lineId)) {
     for (const b of patternBrigades(p)) {
