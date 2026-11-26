@@ -12,7 +12,7 @@ export interface Punch {
   /** minuty od północy dnia date */
   min: number;
   dir: 'in' | 'out';
-  source: 'qr' | 'manual' | 'tna';
+  source: 'qr' | 'manual' | 'plan' | 'tna';
   kiosk?: string;
   note?: string;
 }
@@ -111,6 +111,25 @@ export const STATUS_LABEL: Record<DayStatus, string> = {
   off: 'wolne',
   pending: 'w trakcie',
 };
+
+/** Statusy, przy których brakujące odbicia można uzupełnić jednym kliknięciem wg grafiku. */
+export const FIXABLE: DayStatus[] = ['missing', 'no_in', 'no_out'];
+
+/**
+ * Brakujące odbicia wg grafiku: wejście o początku zmiany, wyjście o jej końcu
+ * (nocka kończy się następnego dnia). Zwraca puste, gdy nic nie brakuje.
+ */
+export function planPunches(r: DayCheck): Omit<Punch, 'id' | 'at'>[] {
+  if (!r.plan || r.absence || !FIXABLE.includes(r.status)) return [];
+  const at = (h: number, dir: 'in' | 'out') => {
+    const dayOff = Math.floor(h / 24);
+    return { workerId: r.worker.id, date: addDays(r.date, dayOff), min: Math.round((h - dayOff * 24) * 60), dir, source: 'plan' as const };
+  };
+  const out: Omit<Punch, 'id' | 'at'>[] = [];
+  if (r.firstIn === undefined) out.push(at(r.plan.start, 'in'));
+  if (r.lastOut === undefined || (r.firstIn !== undefined && r.lastOut < r.firstIn)) out.push(at(r.plan.end, 'out'));
+  return out;
+}
 
 export const STATUS_TONE: Record<DayStatus, string> = {
   ok: 'green',

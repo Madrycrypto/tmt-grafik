@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { plannedShift } from './coverage';
 import { addDays } from './dates';
-import { checkDay, suggestDir } from './punches';
+import { checkDay, planPunches, suggestDir } from './punches';
 import type { Punch } from './punches';
 import { rotaCell } from './rota';
 import { emptyState } from './seed';
@@ -81,5 +81,21 @@ describe('RCP: plan a odbicia', () => {
     expect(suggestDir([], '2026-12-01T06:00:00Z')).toBe('in');
     expect(suggestDir([inP], '2026-12-01T14:00:00Z')).toBe('out');
     expect(suggestDir([inP], '2026-12-02T06:00:00Z')).toBe('in');
+  });
+
+  it('zatwierdzenie wg grafiku uzupełnia tylko brakujące odbicia (nocka: wyjście następnego dnia)', () => {
+    const { s, w, day, start, end } = setup('p8', 23, true);
+    const all = planPunches(checkDay(s, w, day, []));
+    expect(all.map((p) => [p.dir, p.date, p.min])).toEqual([
+      ['in', day, start * 60],
+      ['out', addDays(day, 1), (end - 24) * 60],
+    ]);
+    const onlyOut = planPunches(checkDay(s, w, day, [punch(day, start + 0.1, 'in')]));
+    expect(onlyOut.map((p) => p.dir)).toEqual(['out']);
+    const full = checkDay(s, w, day, [punch(day, start, 'in'), punch(day, end, 'out')]);
+    expect(planPunches(full)).toEqual([]);
+    // po uzupełnieniu dzień jest OK
+    const filled = all.map((p, i) => ({ ...p, id: `x${i}`, at: `${p.date}T00:00:00Z` }));
+    expect(checkDay(s, w, day, filled).status).toBe('ok');
   });
 });

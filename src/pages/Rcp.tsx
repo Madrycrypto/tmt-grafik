@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../data/AppContext';
 import { deletePunch, savePunch, usePunches } from '../data/punches';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
-import { checkDay, fmtMin, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
+import { checkDay, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { DayCheck, Punch } from '../domain/punches';
 import { LineOptions, TypeTag } from '../ui';
 import { WorkerEditor } from './Pracownicy';
@@ -28,10 +28,13 @@ function AddPunch({ row, onAdd }: { row: DayCheck; onAdd: (dir: 'in' | 'out', hh
     );
   return (
     <span className="row" style={{ gap: 4, alignItems: 'center', flexWrap: 'nowrap' }}>
-      <select className="input" value={dir} onChange={(e) => setDir(e.target.value as 'in' | 'out')} aria-label={t('Kierunek')}>
-        <option value="in">{t('Wejście')}</option>
-        <option value="out">{t('Wyjście')}</option>
-      </select>
+      <span role="group" aria-label={t('Kierunek')} style={{ display: 'inline-flex' }}>
+        {(['in', 'out'] as const).map((d) => (
+          <button key={d} type="button" className={`btn small ${dir === d ? 'primary' : ''}`} aria-pressed={dir === d} onClick={() => setDir(d)}>
+            {d === 'in' ? t('Wejście') : t('Wyjście')}
+          </button>
+        ))}
+      </span>
       <input className="input" type="time" value={time} onChange={(e) => setTime(e.target.value)} aria-label={t('Godzina')} />
       {night && (
         <label className="sub" style={{ whiteSpace: 'nowrap' }}>
@@ -90,6 +93,23 @@ export default function Rcp() {
       alert((e as Error).message);
     }
   };
+
+  const confirmPlan = async (list: DayCheck[]) => {
+    const todo = list.flatMap((r) => planPunches(r).map((p) => ({ r, p })));
+    if (!todo.length) return;
+    try {
+      for (const { p } of todo) {
+        const hh = fmtMin(p.min);
+        await savePunch(backend.client, { ...p, id: crypto.randomUUID(), at: new Date(`${p.date}T${hh}:00`).toISOString() });
+      }
+      const names = [...new Set(todo.map((x) => x.r.worker.name))];
+      update(() => undefined, `RCP zatwierdzono wg grafiku (${date}): ${names.join(', ')}`);
+      await reload();
+    } catch (e) {
+      alert((e as Error).message);
+    }
+  };
+  const fixable = rows.filter((r) => planPunches(r).length > 0);
 
   const remove = async (row: DayCheck, p: Punch) => {
     if (!confirm(t('Usunąć odbicie {d} {h}?', { d: p.date, h: fmtMin(p.min) }))) return;
@@ -152,6 +172,18 @@ export default function Rcp() {
       <section className="card">
         <div className="card-head">
           <h2>{t('Plan a odbicia')}</h2>
+          {canEdit && fixable.length > 0 && (
+            <button
+              type="button"
+              className="btn small primary"
+              title={t('Wpisuje brakujące wejścia i wyjścia o godzinach z grafiku')}
+              onClick={() => {
+                if (confirm(t('Zatwierdzić wg grafiku {n} os. bez kompletnych odbić?', { n: fixable.length }) + '\n\n' + fixable.map((r) => r.worker.name).join(', '))) void confirmPlan(fixable);
+              }}
+            >
+              ✓ {t('Zatwierdź wg grafiku wszystkich ({n})', { n: fixable.length })}
+            </button>
+          )}
           <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={onlyProblems} onChange={(e) => setOnlyProblems(e.target.checked)} />
             {t('tylko problemy')}
@@ -193,13 +225,18 @@ export default function Rcp() {
                   <td>
                     <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                       {r.punches.map((p) => (
-                        <span key={p.id} className="tag" title={p.source === 'manual' ? t('dodane ręcznie') : `${t('kiosk')}: ${p.kiosk ?? ''}`}>
-                          {p.dir === 'in' ? '→' : '←'} {fmtMin(p.min)}{p.date !== date ? ` (${fmtDate(p.date)})` : ''}{p.source === 'manual' ? ' ✎' : ''}
+                        <span key={p.id} className="tag" title={p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : `${t('kiosk')}: ${p.kiosk ?? ''}`}>
+                          {p.dir === 'in' ? '→' : '←'} {fmtMin(p.min)}{p.date !== date ? ` (${fmtDate(p.date)})` : ''}{p.source === 'manual' ? ' ✎' : p.source === 'plan' ? ' ✓' : ''}
                           {canEdit && (
                             <button type="button" className="btn small ghost" style={{ padding: '0 4px' }} aria-label={t('Usuń odbicie')} onClick={() => void remove(r, p)}>×</button>
                           )}
                         </span>
                       ))}
+                      {canEdit && planPunches(r).length > 0 && (
+                        <button type="button" className="btn small primary" title={t('Wpisz brakujące odbicia o godzinach z grafiku')} onClick={() => void confirmPlan([r])}>
+                          ✓ {t('wg grafiku')}
+                        </button>
+                      )}
                       {canEdit && <AddPunch row={r} onAdd={(d, h, n) => void add(r, d, h, n)} />}
                     </div>
                   </td>
@@ -209,7 +246,7 @@ export default function Rcp() {
           </table>
         </div>
         <div className="sub" style={{ marginTop: 8 }}>
-          {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie.')}
+          {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie, ✓ = zatwierdzone wg grafiku.')}
         </div>
       </section>
       {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}
