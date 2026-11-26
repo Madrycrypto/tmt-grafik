@@ -189,7 +189,7 @@ describe('3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny
     }
   });
 
-  it('maks. 3 nocki w tygodniu, ≥ 11 h odpoczynku dobowego, tygodniowy ≥ 35 h (≥ 24 h przy przejściu na inną zmianę)', () => {
+  it('maks. 3 nocki w tygodniu, ≥ 11 h odpoczynku dobowego, ≥ 35 h tygodniowego', () => {
     const mon = days.indexOf('2026-12-07');
     for (const b of patternBrigades(p)) {
       const spans: [number, number][] = [];
@@ -212,10 +212,8 @@ describe('3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny
           cur = Math.max(cur, e);
         }
         longest = Math.max(longest, to - cur);
-        // KP art. 133 § 2: przy przejściu na inną zmianę (tu: z nocek na popołudnia) odpoczynek tygodniowy ≥ 24 h, inaczej ≥ 35 h
-        const labels = days.slice(wk, wk + 7).map((d) => work(b as 'A', d)?.label).filter(Boolean);
-        const changes = labels.includes('N') && (labels.includes('R') || labels.includes('P'));
-        expect(longest, `${b} tydzień ${days[wk]}`).toBeGreaterThanOrEqual(changes ? 24 : 35);
+        // pełne 35 h w każdym tygodniu, bez korzystania z wyjątku art. 133 § 2 KP
+        expect(longest, `${b} tydzień ${days[wk]}`).toBeGreaterThanOrEqual(35);
       }
     }
   });
@@ -239,6 +237,30 @@ describe('po nockach przejście na popołudnie', () => {
       const firstBlockEnd = seq.indexOf('N') + 3;
       expect(seq.slice(0, 3)).toEqual(['N', 'N', 'N']);
       expect(seq.slice(firstBlockEnd).find((l) => l !== 'W')).toBe('P');
+    }
+  });
+});
+
+describe('okno na maintenance', () => {
+  it('ostatnia nocka bloku 20:00–04:00 (pełne 8 h); w czwartek 04:00–07:00 nikt nie pracuje', () => {
+    for (const kind of ['3L', '3LS'] as const) {
+      const { s, id } = withSystem(kind, 8, 7);
+      const p = s.patterns.find((x) => x.id === id)!;
+      const def = (c: string) => s.shiftDefs.find((d) => d.code === c);
+      const last = def(p.sequence[2])!;
+      expect([last.label, last.start, last.hours]).toEqual(['N', 20, 8]);
+      for (const d of monthDays('2027-02')) {
+        if (weekday(d) !== 4) continue;
+        const prev = monthDays('2027-02')[monthDays('2027-02').indexOf(d) - 1];
+        for (const b of patternBrigades(p)) {
+          // zmiana zaczęta w środę nie może trwać po 4:00 w czwartek, a czwartkowa nie zaczyna się przed 7:00
+          const w = rotaCell(s, id, b, prev);
+          const wd = w.status === 'work' ? def(w.code)! : null;
+          if (wd) expect(wd.start + wd.hours, `${kind} ${b} ${prev}`).toBeLessThanOrEqual(28);
+          const t = rotaCell(s, id, b, d);
+          if (t.status === 'work') expect(def(t.code)!.start, `${kind} ${b} ${d}`).toBeGreaterThanOrEqual(7);
+        }
+      }
     }
   });
 });

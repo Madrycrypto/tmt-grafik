@@ -39,6 +39,13 @@ export function buildSystem(state: AppState, spec: SystemSpec): { shiftDefs: Shi
     return code;
   });
   const week = (c: string) => [c, c, c, c, c, OFF, OFF];
+  const defCode = (label: string, st: number) => {
+    const existing = [...state.shiftDefs, ...newDefs].find((d) => d.start === st && d.hours === hours && d.label === label);
+    if (existing) return existing.code;
+    const code = `${label}${hours}_${String(st).padStart(2, '0')}`;
+    newDefs.push({ code, label, start: st, hours });
+    return code;
+  };
   let sequence: string[];
   let offsets: Record<BrigadeId, number>;
   let brigades: BrigadeId[];
@@ -59,10 +66,13 @@ export function buildSystem(state: AppState, spec: SystemSpec): { shiftDefs: Shi
     // Kolejność zmian w tygodniu tylko rośnie (R → P → N), więc zawsze jest ≥ 11 h odpoczynku;
     // nocki: 3 w jednym tygodniu, 2 w drugim, potem 2 tygodnie bez nocek.
     const [R, P, N] = codes;
+    // ostatnia nocka bloku 3 h wcześniej (np. 20:00–04:00): koniec o 4:00 daje 35 h odpoczynku
+    // tygodniowego do piątkowego popołudnia, a w czwartek 04:00–07:00 linia stoi (maintenance)
+    const NE = defCode('N', (slots[2].start + 21) % 24);
     sequence = [
       // po nockach dzień wolny i przejście na popołudnie (łagodniej niż na ranek);
       // wariant z sobotą: sobota popołudnie — 20 dni na 4 tygodnie, pełny wymiar
-      ...[N, N, N, OFF, P, kind === '3LS' ? P : OFF, OFF],
+      ...[N, N, NE, OFF, P, kind === '3LS' ? P : OFF, OFF],
       ...[R, R, P, N, N, OFF, OFF],
       ...[P, P, P, P, P, OFF, OFF],
       ...[R, R, R, R, R, OFF, OFF],
