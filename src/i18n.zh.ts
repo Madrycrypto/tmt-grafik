@@ -880,4 +880,9 @@ export const zh: Record<string, string> = {
   'okresy rozliczeniowe:': '各结算周期：',
   'wymiar w podglądzie: {h} h · w tym miesiącu {m} h': '预览内标准工时：{h} 小时 · 本月 {m} 小时',
   'Tylko podgląd dla planowania — rozliczenie w kadrach zostaje według okresu rozliczeniowego': '仅用于计划的预览——人事结算仍按结算周期',
+  'Stanowisko specjalne ★ — kliknij, aby zdjąć': '特殊工位 ★ —— 点击取消',
+  'Oznacz jako stanowisko specjalne ★': '标记为特殊工位 ★',
+  '{s}: zwykłe stanowisko': '{s}：普通工位',
+  '{s}: stanowisko specjalne ★': '{s}：特殊工位 ★',
+  'Kliknij kółko, aby wybrać poziom (albo wpisz cyfrę 0–4). Pomarańczowe = poniżej minimum stanowiska. ★ = stanowisko specjalne.': '点击圆圈选择等级（或输入数字 0–4）。橙色 = 低于工位最低要求。★ = 特殊工位。',
 };

@@ -135,13 +135,20 @@ td { padding: 8px 8px; border-bottom: 1px solid var(--line-soft); vertical-align
 tr.gap-row { background: var(--red-soft); }
 @media (max-width: 860px) { .sticky-col { max-width: 132px; min-width: 112px; } }
 
-.lv { display: inline-flex; align-items: center; justify-content: center; width: 30px; height: 30px; border-radius: 15px; font-weight: 700; font-size: 13px; border: 0; }
-.lv0 { color: #9aa0ab; background: transparent; }
-.lv1 { background: var(--line-soft); color: var(--tag-ink); }
-.lv2 { background: var(--lv2-bg); color: var(--lv2-ink); }
-.lv3 { background: var(--green-soft); color: var(--green-ink); }
-.lv4 { background: var(--green); color: #fff; }
-button.lv { cursor: pointer; }
+.lv { display: inline-flex; align-items: center; justify-content: center; gap: 2px; min-width: 30px; height: 30px; border: 0; background: transparent; color: var(--ink); padding: 0 4px; border-radius: 6px; }
+.lv0 { color: var(--muted); }
+.lv-ok { color: var(--ink); }
+.lv-low { color: var(--amber-ink); }
+.lv-pick { position: relative; display: inline-block; }
+.lv-btn { cursor: pointer; }
+.lv-btn:hover, .lv-btn:focus-visible { background: var(--line-soft); outline: none; }
+.lv-caret { font-size: 9px; color: var(--muted); }
+.lv-menu { position: fixed; z-index: 60; transform: translateX(-50%); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.15); padding: 4px; display: flex; flex-direction: column; min-width: 190px; text-align: left; }
+.lv-opt { display: flex; align-items: center; gap: 8px; border: 0; background: transparent; color: var(--ink); padding: 6px 8px; border-radius: 6px; cursor: pointer; font-size: 13px; text-align: left; }
+.lv-opt:hover { background: var(--line-soft); }
+.lv-opt.on { background: var(--accent-soft); font-weight: 600; }
+.star-btn { border: 0; background: transparent; cursor: pointer; font-size: 15px; line-height: 1; padding: 0 2px; color: var(--muted); }
+.star-btn.on { color: #e0a100; }
 
 .cell { display: flex; align-items: center; justify-content: center; height: 30px; min-width: 30px; border-radius: 6px; font-size: 12px; font-weight: 700; border: 0; width: 100%; }
 button.cell { cursor: pointer; }

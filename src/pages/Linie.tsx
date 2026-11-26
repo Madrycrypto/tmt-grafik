@@ -259,7 +259,16 @@ function LineCard({ lineId }: { lineId: string }) {
           <tbody>
             {stations.map((s, i) => (
               <tr key={s.id}>
-                <td>
+                <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                  <button
+                    type="button"
+                    className={`star-btn ${s.special ? 'on' : ''}`}
+                    title={s.special ? t('Stanowisko specjalne ★ — kliknij, aby zdjąć') : t('Oznacz jako stanowisko specjalne ★')}
+                    aria-pressed={!!s.special}
+                    onClick={() => patch(s.id, { special: !s.special || undefined })}
+                  >
+                    {s.special ? '★' : '☆'}
+                  </button>
                   <input className="input" style={{ width: '100%' }} aria-label={t('Nazwa stanowiska')} defaultValue={s.name} onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && patch(s.id, { name: e.target.value.trim() })} />
                 </td>
                 <td>

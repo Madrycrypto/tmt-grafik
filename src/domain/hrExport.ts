@@ -84,6 +84,8 @@ export interface HrSummary {
   absences: Record<string, number>;
   /** godziny przepracowane na każdym stanowisku (id → h), null = rezerwa */
   byStation: Record<string, number>;
+  /** godziny na stanowiskach specjalnych (★) */
+  specialHours: number;
 }
 
 export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
@@ -111,6 +113,7 @@ export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
       extraHours: days.filter((d) => d.extra).reduce((s, d) => s + d.hours, 0),
       absences,
       byStation,
+      specialHours: Object.entries(byStation).reduce((h, [id, v]) => h + (state.stations.find((x) => x.id === id)?.special ? v : 0), 0),
     };
   });
 }
@@ -143,6 +146,7 @@ export function hrMonthlyCsv(state: AppState, f: HrFilter): string {
     'w tym nocne 22-6',
     'w tym niedziela',
     'w tym dodatkowe',
+    'w tym na stanowiskach ★',
     'L4 (dni)',
     'Urlop (dni)',
     'Inne nieob. (dni)',
@@ -160,6 +164,7 @@ export function hrMonthlyCsv(state: AppState, f: HrFilter): string {
     s.night,
     s.sunday,
     s.extraHours,
+    Math.round(s.specialHours * 100) / 100,
     s.absences.L4 ?? 0,
     s.absences.UW ?? 0,
     (s.absences.NN ?? 0) + (s.absences.INNE ?? 0),
@@ -216,7 +221,7 @@ export function hrStationsCsv(state: AppState, f: HrFilter): string {
         lineOf(state, s.worker),
         s.worker.brigade,
         home,
-        st?.name ?? 'rezerwa',
+        st ? `${st.name}${st.special ? ' ★' : ''}` : 'rezerwa',
         st ? (state.lines.find((l) => l.id === st.lineId)?.name ?? '') : '',
         Math.round(h * 100) / 100,
         s.hours ? Math.round((h / s.hours) * 1000) / 10 : 0,

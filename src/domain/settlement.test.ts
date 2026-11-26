@@ -49,3 +49,19 @@ describe('okres rozliczeniowy', () => {
     expect(after.diff).toBe(before.diff);
   });
 });
+
+describe('stanowiska specjalne ★', () => {
+  it('godziny na stanowisku ★ liczą się osobno w eksporcie dla kadr', async () => {
+    const { hrSummary, hrMonthlyCsv } = await import('./hrExport');
+    const s = demoState();
+    const w = s.workers.find((x) => x.homeStationId)!;
+    const f = { month: '2026-12', lineId: 'all', who: 'all', includeInactive: false } as const;
+    const before = hrSummary(s, f).find((r) => r.worker.id === w.id)!;
+    expect(before.specialHours).toBe(0);
+    s.stations.find((x) => x.id === w.homeStationId)!.special = true;
+    const after = hrSummary(s, f).find((r) => r.worker.id === w.id)!;
+    expect(after.specialHours).toBe(after.byStation[w.homeStationId!]);
+    expect(after.specialHours).toBeGreaterThan(0);
+    expect(hrMonthlyCsv(s, f)).toContain('w tym na stanowiskach ★');
+  });
+});

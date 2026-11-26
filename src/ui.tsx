@@ -58,24 +58,114 @@ export function Sheet({ title, sub, onClose, children }: { title: ReactNode; sub
   );
 }
 
-export function Level({ value, onClick, title }: { value: number; onClick?: () => void; title?: string }) {
-  const label = value ? String(value) : '–';
-  const tip = title ?? `${t('Poziom')} ${value}: ${t(LEVEL_LABEL[value] ?? '')}`;
-  if (onClick)
-    return (
-      <button type="button" className={`lv lv${value}`} onClick={onClick} title={tip} aria-label={tip}>
-        {label}
-      </button>
-    );
+/** Kółko ćwiartkowe (Harvey ball): 0 = puste, 1 = ćwiartka … 4 = pełne. */
+export function Ball({ value, size = 22 }: { value: number; size?: number }) {
+  const a = (Math.max(0, Math.min(4, value)) * Math.PI) / 2;
+  const x = 11 + 9 * Math.sin(a);
+  const y = 11 - 9 * Math.cos(a);
   return (
-    <span className={`lv lv${value}`} title={tip}>
-      {label}
+    <svg viewBox="0 0 22 22" width={size} height={size} aria-hidden="true" style={{ display: 'block' }}>
+      <circle cx="11" cy="11" r="9" fill="none" stroke="currentColor" strokeWidth="1.6" opacity={value ? 1 : 0.3} />
+      {value >= 4 ? (
+        <circle cx="11" cy="11" r="9" fill="currentColor" />
+      ) : value > 0 ? (
+        <path d={`M11 11 L11 2 A9 9 0 ${value > 2 ? 1 : 0} 1 ${x.toFixed(2)} ${y.toFixed(2)} Z`} fill="currentColor" />
+      ) : null}
+    </svg>
+  );
+}
+
+/** Poziom w matrycy jako kółko ćwiartkowe; z `min` poziom poniżej wymaganego jest wyróżniony. */
+export function Level({ value, min, title }: { value: number; min?: number; title?: string }) {
+  const tip = title ?? `${t('Poziom')} ${value}: ${t(LEVEL_LABEL[value] ?? '')}`;
+  const tone = value === 0 ? 'lv0' : min !== undefined && value < min ? 'lv-low' : 'lv-ok';
+  return (
+    <span className={`lv ${tone}`} title={tip} aria-label={tip}>
+      <Ball value={value} />
+    </span>
+  );
+}
+
+/**
+ * Komórka matrycy z rozwijaną listą poziomów 0–4 (kółka ćwiartkowe).
+ * Klawiatura: cyfra 0–4 ustawia poziom od razu, Enter/spacja otwiera listę.
+ */
+export function LevelPicker({ value, min, title, onChange }: { value: number; min?: number; title?: string; onChange: (level: number) => void }) {
+  // lista jest „fixed”, żeby przewijana tabela jej nie ucinała
+  const [pos, setPos] = useState<{ x: number; y: number; up: boolean } | null>(null);
+  const open = pos !== null;
+  const setOpen = (v: boolean) => !v && setPos(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = () => setPos(null);
+    const esc = (e: KeyboardEvent) => e.key === 'Escape' && setPos(null);
+    window.addEventListener('click', close);
+    window.addEventListener('keydown', esc);
+    window.addEventListener('scroll', close, true);
+    window.addEventListener('resize', close);
+    return () => {
+      window.removeEventListener('click', close);
+      window.removeEventListener('keydown', esc);
+      window.removeEventListener('scroll', close, true);
+      window.removeEventListener('resize', close);
+    };
+  }, [open]);
+  const tone = value === 0 ? 'lv0' : min !== undefined && value < min ? 'lv-low' : 'lv-ok';
+  return (
+    <span className="lv-pick">
+      <button
+        type="button"
+        className={`lv lv-btn ${tone}`}
+        title={title}
+        aria-label={title}
+        aria-haspopup="listbox"
+        aria-expanded={open}
+        onClick={(e) => {
+          e.stopPropagation();
+          if (open) return setPos(null);
+          const r = e.currentTarget.getBoundingClientRect();
+          const up = r.bottom + 200 > window.innerHeight;
+          setPos({ x: Math.min(Math.max(r.left + r.width / 2, 100), window.innerWidth - 100), y: up ? window.innerHeight - r.top + 2 : r.bottom + 2, up });
+        }}
+        onKeyDown={(e) => {
+          if (/^[0-4]$/.test(e.key)) {
+            e.preventDefault();
+            onChange(Number(e.key));
+            setOpen(false);
+          }
+        }}
+      >
+        <Ball value={value} />
+        <span className="lv-caret">▾</span>
+      </button>
+      {pos && (
+        <span className="lv-menu" role="listbox" style={pos.up ? { left: pos.x, bottom: pos.y } : { left: pos.x, top: pos.y }} onClick={(e) => e.stopPropagation()}>
+          {[0, 1, 2, 3, 4].map((l) => (
+            <button
+              key={l}
+              type="button"
+              role="option"
+              aria-selected={l === value}
+              className={`lv-opt ${l === value ? 'on' : ''}`}
+              onClick={() => {
+                onChange(l);
+                setOpen(false);
+              }}
+            >
+              <Ball value={l} size={20} />
+              <span>
+                {l} · {t(LEVEL_LABEL[l])}
+              </span>
+            </button>
+          ))}
+        </span>
+      )}
     </span>
   );
 }
 
 export function TypeTag({ w }: { w: Worker }) {
-  const cls = w.type === 'CN' ? 'blue' : w.type === 'AG' ? 'amber' : '';
+  const cls = w.type === 'CN' ? 'red' : w.type === 'AG' ? 'blue' : 'green';
   return <span className={`tag ${cls}`}>{w.type === 'AG' && w.agency ? w.agency : t(TYPE_LABEL[w.type])}</span>;
 }
 

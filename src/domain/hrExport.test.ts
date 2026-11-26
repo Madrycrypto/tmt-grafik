@@ -40,7 +40,7 @@ describe('eksport dla kadr', () => {
     const s = demoState();
     const lines = hrMonthlyCsv(s, { ...F, lineId: 'hvac1' }).split('\r\n');
     const head = lines[0].split(';');
-    expect(head).toHaveLength(6 + 31 + 8);
+    expect(head).toHaveLength(6 + 31 + 9);
     expect(lines.filter((l) => l && !l.startsWith('Legenda') && !l.startsWith('Wygenerowano')).length - 1).toBe(s.workers.filter((w) => w.lineId === 'hvac1').length);
   });
 

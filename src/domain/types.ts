@@ -64,6 +64,8 @@ export interface Station {
   order: number;
   /** stanowiska, których operator może jednocześnie obsłużyć to stanowisko (np. OP50-2 dla OP51/52) */
   pairWith?: string[];
+  /** stanowisko specjalne (★), np. do premii za pracę na nim */
+  special?: boolean;
 }
 
 export interface SkillEntry {

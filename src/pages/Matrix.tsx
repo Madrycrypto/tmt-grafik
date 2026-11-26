@@ -4,12 +4,12 @@ import { level } from '../domain/coverage';
 import { autoAssign } from '../domain/autoAssign';
 import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
-import { Level, LineSelect, TypeTag, useLine, usePersistent } from '../ui';
+import { Level, LevelPicker, LineSelect, TypeTag, useLine, usePersistent } from '../ui';
 import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
 
 export default function Matrix() {
-  const { state, update, undo } = useApp();
+  const { state, update, undo, canEdit } = useApp();
   const [lineId, setLineId] = useLine(state);
   const [brigade, setBrigade] = useState<string>('all');
   const [others, setOthers] = useState(false);
@@ -39,9 +39,9 @@ export default function Matrix() {
     [state, viewLines, others, stations, brigade, query, wide],
   );
 
-  const setLevel = (workerId: string, stationId: string) => {
+  const setLevel = (workerId: string, stationId: string, next: number) => {
     const w = state.workers.find((x) => x.id === workerId)!;
-    const next = (level(w, stationId) + 1) % 5;
+    if (level(w, stationId) === next) return;
     const st = state.stations.find((s) => s.id === stationId)!;
     update((d) => {
       const dw = d.workers.find((x) => x.id === workerId)!;
@@ -165,7 +165,24 @@ export default function Matrix() {
                   <th className="sticky-col">{t('Pracownik')}</th>
                   {stations.map((s) => (
                     <th key={s.id} style={{ textAlign: 'center', whiteSpace: 'normal', minWidth: 90 }}>
-                      {s.name}
+                      {s.name}{' '}
+                      <button
+                        type="button"
+                        className={`star-btn ${s.special ? 'on' : ''}`}
+                        disabled={!canEdit}
+                        title={s.special ? t('Stanowisko specjalne ★ — kliknij, aby zdjąć') : t('Oznacz jako stanowisko specjalne ★')}
+                        aria-pressed={!!s.special}
+                        onClick={() => {
+                          update((d) => {
+                            const st = d.stations.find((x) => x.id === s.id)!;
+                            if (st.special) delete st.special;
+                            else st.special = true;
+                          }, `Stanowisko ${s.name}: ${s.special ? 'zwykłe' : 'specjalne ★'}`);
+                          toast(s.special ? t('{s}: zwykłe stanowisko', { s: s.name }) : t('{s}: stanowisko specjalne ★', { s: s.name }), { undo });
+                        }}
+                      >
+                        {s.special ? '★' : '☆'}
+                      </button>
                       <div style={{ fontWeight: 400 }}>{t('min.')} {s.minLevel}</div>
                     </th>
                   ))}
@@ -183,7 +200,16 @@ export default function Matrix() {
                     </td>
                     {stations.map((s) => (
                       <td key={s.id} style={{ textAlign: 'center', background: w.homeStationId === s.id ? 'var(--accent-soft)' : undefined }}>
-                        <Level value={level(w, s.id)} onClick={() => setLevel(w.id, s.id)} title={`${w.name} — ${s.name}: ${t('Poziom')} ${level(w, s.id)}`} />
+                        {canEdit ? (
+                          <LevelPicker
+                            value={level(w, s.id)}
+                            min={s.minLevel}
+                            onChange={(l) => setLevel(w.id, s.id, l)}
+                            title={`${w.name} — ${s.name}: ${t('Poziom')} ${level(w, s.id)} (${t(LEVEL_LABEL[level(w, s.id)])})`}
+                          />
+                        ) : (
+                          <Level value={level(w, s.id)} min={s.minLevel} title={`${w.name} — ${s.name}: ${t('Poziom')} ${level(w, s.id)}`} />
+                        )}
                       </td>
                     ))}
                   </tr>
@@ -210,7 +236,7 @@ export default function Matrix() {
             </table>
           </div>
         )}
-        <div className="sub" style={{ marginTop: 8 }}>{t('Niebieskie tło = stanowisko macierzyste pracownika.')} {t('Kliknij nazwisko, aby otworzyć kartę pracownika.')}</div>
+        <div className="sub" style={{ marginTop: 8 }}>{t('Niebieskie tło = stanowisko macierzyste pracownika.')} {t('Kliknij kółko, aby wybrać poziom (albo wpisz cyfrę 0–4). Pomarańczowe = poniżej minimum stanowiska. ★ = stanowisko specjalne.')} {t('Kliknij nazwisko, aby otworzyć kartę pracownika.')}</div>
       </section>
       {open && <WorkerEditor workerId={open} onClose={() => setOpen(null)} />}
     </>
