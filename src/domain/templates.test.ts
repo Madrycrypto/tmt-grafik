@@ -4,6 +4,7 @@ import { monthDays, weekday } from './dates';
 import { gapsOnDay, rotaCell, summarize } from './rota';
 import { demoState, emptyState } from './seed';
 import { buildSystem } from './templates';
+import { holidayName } from './holidays';
 import type { SystemKind } from './templates';
 import type { AppState } from './types';
 import { patternBrigades } from './types';
@@ -109,5 +110,61 @@ describe('święta ustawowe', () => {
     const c = withSystem('4', 8, 7);
     const working = ['A', 'B', 'C', 'D'].map((b) => rotaCell(c.s, c.id, b as 'A', '2026-12-24')).filter((x) => x.status === 'work');
     expect(working).toHaveLength(3);
+  });
+});
+
+describe('3 zmiany lekkie (4 brygady, maks. 3 nocki)', () => {
+  const { s, id } = withSystem('3L', 8, 7);
+  const p = s.patterns.find((x) => x.id === id)!;
+  const days = [...monthDays('2026-12'), ...monthDays('2027-01'), ...monthDays('2027-02')];
+  const def = (code: string) => s.shiftDefs.find((d) => d.code === code);
+
+  it('każdego dnia pn–pt obsadzone są R, P i N; w weekend nikt', () => {
+    for (const d of days) {
+      const labels = patternBrigades(p)
+        .map((b) => rotaCell(s, id, b, d))
+        .filter((c) => c.status === 'work')
+        .map((c) => def(c.code)!.label);
+      if (weekday(d) === 0 || weekday(d) === 6 || holidayName(d)) expect(labels).toEqual([]);
+      else for (const l of ['R', 'P', 'N']) expect(labels, `${d} ${l}`).toContain(l);
+    }
+  });
+
+  it('żadna brygada nie ma więcej niż 3 nocek w tygodniu', () => {
+    for (const b of patternBrigades(p)) {
+      for (let i = 0; i + 7 <= days.length; i += 7) {
+        const nights = days.slice(i, i + 7).filter((d) => {
+          const c = rotaCell(s, id, b, d);
+          return c.status === 'work' && def(c.code)!.label === 'N';
+        }).length;
+        expect(nights).toBeLessThanOrEqual(3);
+      }
+    }
+  });
+
+  it('między zmianami zawsze jest co najmniej 11 h odpoczynku', () => {
+    for (const b of patternBrigades(p)) {
+      let lastEnd = -Infinity;
+      days.forEach((d, i) => {
+        const c = rotaCell(s, id, b, d);
+        if (c.status !== 'work') return;
+        const sd = def(c.code)!;
+        const start = i * 24 + sd.start;
+        expect(start - lastEnd, `${b} ${d}`).toBeGreaterThanOrEqual(11);
+        lastEnd = start + sd.hours;
+      });
+    }
+  });
+
+  it('średnio 38 h tygodniowo (152 h na 4 tygodnie), więc warto dopełniać godziny', () => {
+    for (const b of patternBrigades(p)) {
+      const feb = days.indexOf('2027-02-01'); // poniedziałek, luty bez świąt
+      const hours = days.slice(feb, feb + 28).reduce((h, d) => {
+        const c = rotaCell(s, id, b, d);
+        return h + (c.status === 'work' ? def(c.code)!.hours : 0);
+      }, 0);
+      expect(hours).toBeGreaterThanOrEqual(144);
+      expect(hours).toBeLessThanOrEqual(160);
+    }
   });
 });

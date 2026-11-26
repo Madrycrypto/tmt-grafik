@@ -641,4 +641,5 @@ export const zh: Record<string, string> = {
   'święta': '节假日',
   'cel dni': '目标天数',
   'razem do dopełnienia: {h} h (≈ {s} zmian na osobę)': '合计需补足：{h} 小时（每人约 {s} 个班）',
+  '3 zmiany lekkie (4 brygady pn–pt, maks. 3 nocki w tygodniu)': '轻量三班（4 个班组，周一至周五，每周最多 3 个夜班）',
 };
