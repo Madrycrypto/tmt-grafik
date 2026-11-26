@@ -17,7 +17,7 @@ import { t } from '../i18n';
 const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
 
 export default function Grafik() {
-  const { state, update } = useApp();
+  const { state, update, undo } = useApp();
   const [month, setMonth] = useState(todayIso().slice(0, 7));
   const [scope, setScope] = usePersistent('grafik-line', 'all');
   // zakres: 'all', 'g:<grupa>' (linia główna, np. CFM) albo id linii
@@ -26,6 +26,9 @@ export default function Grafik() {
   const [patternId, setPatternId] = usePersistent('pattern', state.patterns[0]?.id ?? '');
   const pattern = scopePatterns.find((p) => p.id === patternId) ?? scopePatterns[0] ?? state.patterns[0];
   const norm = monthNorm(month);
+  const shiftH = (pattern && state.shiftDefs.find((d) => patternShiftCodes(pattern).includes(d.code))?.hours) || 8;
+  // dni potrzebne do wymiaru; przy 12 h w dół, żeby nie przekroczyć wymiaru
+  const normDays = Math.floor(norm.hours / shiftH);
   const groups = [...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))];
   const days = monthDays(month);
   const label = (code: string) => t(code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
@@ -44,6 +47,11 @@ export default function Grafik() {
     [state, pattern, month],
   );
   const summary = useMemo(() => (pattern ? summarize(state, pattern.id, month) : []), [state, pattern, month]);
+  // to samo bez limitu dni — ile daje sam cykl
+  const fullSummary = useMemo(
+    () => (pattern ? summarize({ ...state, targets: state.targets.filter((x) => !(x.patternId === pattern.id && x.month === month)) }, pattern.id, month) : []),
+    [state, pattern, month],
+  );
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
   const [hr, setHr] = useState(false);
   const [fill, setFill] = useState(false);
@@ -73,7 +81,7 @@ export default function Grafik() {
         if (n === undefined) delete t.days[br];
         else t.days[br] = n;
       }
-    });
+    }, `Limit dni ${pattern.name} ${month}: ${b === 'all' ? 'wszystkie' : b} = ${n ?? 'pełny cykl'}`);
   };
 
   const membersOf = (b: BrigadeId) =>
@@ -277,23 +285,83 @@ export default function Grafik() {
       <div className="split">
         <section className="card main-col">
           <div className="card-head">
-            <h2>{t('Docelowa liczba dni pracy')} — {month}</h2>
+            <h2>{t('Ile dni pracuje brygada')} — {month}</h2>
           </div>
           <p className="sub" style={{ marginTop: 0 }}>
-            {t('Generator zostawia każdej brygadzie dokładnie tyle dni, nadwyżkę zamienia na wolne rozłożone równomiernie. Puste pole = pełny cykl.')}
+            {t('Gdy cykl daje więcej dni niż wymiar, ustaw limit — nadmiarowe dni zamienią się na wolne (niebieskie „w” w grafiku), rozłożone równo w miesiącu.')}
           </p>
-          <div className="row">
-            <label className="field" style={{ width: 120 }}>
-              {t('Wszystkie')}
-              <input type="number" min={0} max={31} placeholder={t('np. 20')} onBlur={(e) => e.target.value && setTarget('all', e.target.value)} />
-            </label>
-            {patternBrigades(pattern).map((b) => (
-              <label key={b} className="field" style={{ width: 90 }}>
-                Brygada {b}
-                <input type="number" min={0} max={31} value={target?.days[b] ?? ''} onChange={(e) => setTarget(b, e.target.value)} />
-              </label>
-            ))}
+          <div className="row" style={{ marginBottom: 10 }}>
+            <button
+              type="button"
+              className="btn primary"
+              title={t('Wymiar {h} h ÷ zmiana {s} h', { h: norm.hours, s: shiftH })}
+              onClick={() => {
+                setTarget('all', String(normDays));
+                toast(t('Każda brygada pracuje {d} dni ({h} h).', { d: normDays, h: normDays * shiftH }), { undo });
+              }}
+            >
+              {t('Wyrównaj do wymiaru: {d} dni', { d: normDays })}
+            </button>
+            {target && Object.keys(target.days).length > 0 && (
+              <button
+                type="button"
+                className="btn"
+                onClick={() => {
+                  setTarget('all', '');
+                  toast(t('Przywrócono pełny cykl.'), { undo });
+                }}
+              >
+                {t('Pełny cykl (bez limitu)')}
+              </button>
+            )}
           </div>
+          <table>
+            <thead>
+              <tr>
+                <th>{t('Brygada')}</th>
+                <th>{t('Z cyklu')}</th>
+                <th>{t('Limit dni')}</th>
+                <th>{t('Efekt')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {patternBrigades(pattern).map((b) => {
+                const full = fullSummary.find((x) => x.brigade === b);
+                const now = summary.find((x) => x.brigade === b);
+                return (
+                  <tr key={b}>
+                    <td>
+                      <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
+                      <b>{b}</b>
+                    </td>
+                    <td>
+                      {full?.days} {t('dni')} · {full?.hours} h
+                    </td>
+                    <td>
+                      <input
+                        className="input"
+                        style={{ width: 80 }}
+                        type="number"
+                        min={0}
+                        max={31}
+                        placeholder={String(full?.days ?? '')}
+                        aria-label={t('Limit dni brygady {b}', { b })}
+                        value={target?.days[b] ?? ''}
+                        onChange={(e) => setTarget(b, e.target.value)}
+                      />
+                    </td>
+                    <td className="sub">
+                      {target?.days[b] === undefined
+                        ? t('pełny cykl')
+                        : now && full && now.days < full.days
+                          ? t('{n} dni na wolne → {h} h', { n: full.days - now.days, h: now.hours })
+                          : `${now?.hours ?? 0} h`}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
           {summary.some((s) => s.target !== undefined && s.days < s.target) && (
             <div className="note amber" style={{ marginTop: 10 }}>
               {t('Cykl daje mniej dni niż cel dla brygad:')} {summary.filter((s) => s.target !== undefined && s.days < s.target).map((s) => `${s.brigade} (${s.days}/${s.target})`).join(', ')}. {t('Dodaj zmiany ręcznie, klikając w komórki.')}
