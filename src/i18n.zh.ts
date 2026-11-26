@@ -885,5 +885,5 @@ export const zh: Record<string, string> = {
   '{s}: zwykłe stanowisko': '{s}：普通工位',
   '{s}: stanowisko specjalne ★': '{s}：特殊工位 ★',
   'Kliknij kółko, aby wybrać poziom (albo wpisz cyfrę 0–4). Pomarańczowe = poniżej minimum stanowiska. ★ = stanowisko specjalne.': '点击圆圈选择等级（或输入数字 0–4）。橙色 = 低于工位最低要求。★ = 特殊工位。',
-  '3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar)': '轻型三班+周六早班（4个班组，每周最多3个夜班，满工时）',
+  '3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny wymiar)': '轻型三班+周六中班（4个班组，每周最多3个夜班，满工时）',
 };

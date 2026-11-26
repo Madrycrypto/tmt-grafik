@@ -169,7 +169,7 @@ describe('3 zmiany lekkie (4 brygady, maks. 3 nocki)', () => {
   });
 });
 
-describe('3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar)', () => {
+describe('3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny wymiar)', () => {
   const { s, id } = withSystem('3LS', 8, 7);
   const p = s.patterns.find((x) => x.id === id)!;
   const days = [...monthDays('2026-12'), ...monthDays('2027-01'), ...monthDays('2027-02'), ...monthDays('2027-03')];
@@ -179,12 +179,12 @@ describe('3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar
     return c.status === 'work' ? def(c.code) : null;
   };
 
-  it('pn–pt obsadzone R, P i N; w sobotę jedna brygada rano; w niedzielę nikt', () => {
+  it('pn–pt obsadzone R, P i N; w sobotę jedna brygada po południu; w niedzielę nikt', () => {
     for (const d of days) {
       if (holidayName(d)) continue;
       const labels = patternBrigades(p).map((b) => work(b as 'A', d)?.label).filter(Boolean);
       if (weekday(d) === 0) expect(labels).toEqual([]);
-      else if (weekday(d) === 6) expect(labels).toEqual(['R']);
+      else if (weekday(d) === 6) expect(labels).toEqual(['P']);
       else for (const l of ['R', 'P', 'N']) expect(labels, `${d} ${l}`).toContain(l);
     }
   });
@@ -212,9 +212,9 @@ describe('3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar
           cur = Math.max(cur, e);
         }
         longest = Math.max(longest, to - cur);
-        // KP art. 133 § 2: przy przejściu na inną zmianę (tu: z nocek na ranki) odpoczynek tygodniowy ≥ 24 h, inaczej ≥ 35 h
+        // KP art. 133 § 2: przy przejściu na inną zmianę (tu: z nocek na popołudnia) odpoczynek tygodniowy ≥ 24 h, inaczej ≥ 35 h
         const labels = days.slice(wk, wk + 7).map((d) => work(b as 'A', d)?.label).filter(Boolean);
-        const changes = labels.includes('N') && labels.includes('R');
+        const changes = labels.includes('N') && (labels.includes('R') || labels.includes('P'));
         expect(longest, `${b} tydzień ${days[wk]}`).toBeGreaterThanOrEqual(changes ? 24 : 35);
       }
     }
@@ -228,3 +228,18 @@ describe('3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar
     }
   });
 });
+
+describe('po nockach przejście na popołudnie', () => {
+  it('w obu systemach lekkich pierwszą zmianą po bloku nocek jest popołudnie', () => {
+    for (const kind of ['3L', '3LS'] as const) {
+      const { s, id } = withSystem(kind, 8, 7);
+      const p = s.patterns.find((x) => x.id === id)!;
+      const label = (c: string) => s.shiftDefs.find((d) => d.code === c)?.label ?? 'W';
+      const seq = p.sequence.map(label);
+      const firstBlockEnd = seq.indexOf('N') + 3;
+      expect(seq.slice(0, 3)).toEqual(['N', 'N', 'N']);
+      expect(seq.slice(firstBlockEnd).find((l) => l !== 'W')).toBe('P');
+    }
+  });
+});
+

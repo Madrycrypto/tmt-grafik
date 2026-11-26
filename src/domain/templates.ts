@@ -9,7 +9,7 @@ export const SYSTEM_LABEL: Record<SystemKind, string> = {
   '2': '2 zmiany (pn–pt, rotacja co tydzień)',
   '3': '3 zmiany (pn–pt, rotacja co tydzień)',
   '3L': '3 zmiany lekkie (4 brygady pn–pt, maks. 3 nocki w tygodniu)',
-  '3LS': '3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar)',
+  '3LS': '3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny wymiar)',
   '4': '4 brygady — ruch ciągły (7 dni)',
 };
 
@@ -60,8 +60,9 @@ export function buildSystem(state: AppState, spec: SystemSpec): { shiftDefs: Shi
     // nocki: 3 w jednym tygodniu, 2 w drugim, potem 2 tygodnie bez nocek.
     const [R, P, N] = codes;
     sequence = [
-      // wariant z sobotą: po tygodniu nocek sobota rano (8 h) — 20 dni na 4 tygodnie, pełny wymiar
-      ...[N, N, N, OFF, R, kind === '3LS' ? R : OFF, OFF],
+      // po nockach dzień wolny i przejście na popołudnie (łagodniej niż na ranek);
+      // wariant z sobotą: sobota popołudnie — 20 dni na 4 tygodnie, pełny wymiar
+      ...[N, N, N, OFF, P, kind === '3LS' ? P : OFF, OFF],
       ...[R, R, P, N, N, OFF, OFF],
       ...[P, P, P, P, P, OFF, OFF],
       ...[R, R, R, R, R, OFF, OFF],
@@ -76,7 +77,7 @@ export function buildSystem(state: AppState, spec: SystemSpec): { shiftDefs: Shi
   const times = slots.map((s) => fmtRange(s.start, hours)).join(' / ');
   const name =
     kind === '3LS'
-      ? `3 zmiany lekkie 8 h + sobota rano, 4 brygady, maks. 3 nocki, pełny wymiar (${times})`
+      ? `3 zmiany lekkie 8 h + sobota popołudnie, 4 brygady, maks. 3 nocki, pełny wymiar (${times})`
       : kind === '3L'
       ? `3 zmiany lekkie 8 h pn–pt, 4 brygady, maks. 3 nocki (${times})`
       : `${SYSTEM_LABEL[kind].split(' (')[0]} ${hours} h${kind === '4' ? '' : ' pn–pt'} (${times})`;
