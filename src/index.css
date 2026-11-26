@@ -223,3 +223,35 @@ button.cell { cursor: pointer; }
 .group-head h2 { margin: 0; }
 .group-head .chev { font-size: 14px; color: var(--muted); width: 14px; }
 .group-head[aria-expanded='true'] { border-color: var(--accent, #2f55d4); }
+
+/* ---------- RCP v2: wynik odbicia (pełny ekran, kolor = rodzaj) ---------- */
+.punch-result { position: fixed; inset: 0; z-index: 200; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 8px; color: #fff; text-align: center; padding: 24px; animation: kflash 0.25s ease-out; cursor: pointer; }
+.punch-result.in { background: #17803f; }
+.punch-result.out { background: #c62828; }
+.punch-result.private { background: #f2b705; color: #2b2100; }
+.punch-result.error { background: #3a4252; }
+.punch-result.wait { background: var(--side); font-size: 22px; }
+.pr-icon { font-size: 96px; line-height: 1; font-weight: 700; }
+.pr-title { font-family: 'Space Grotesk', sans-serif; font-size: clamp(40px, 9vw, 88px); font-weight: 800; line-height: 1.05; }
+.pr-time { font-size: clamp(36px, 8vw, 72px); font-weight: 700; }
+.pr-name { font-size: clamp(22px, 5vw, 40px); font-weight: 600; opacity: 0.95; }
+.pr-msg { font-size: 20px; max-width: 520px; }
+.pr-undo { margin-top: 18px; background: rgba(255, 255, 255, 0.92); color: #111; font-size: 18px; padding: 12px 20px; }
+.pr-hint { position: absolute; bottom: 18px; font-size: 13px; opacity: 0.7; }
+
+/* skaner w telefonie i „mój kod” */
+.scan-overlay { position: fixed; inset: 0; z-index: 150; background: #10151f; color: #fff; display: flex; flex-direction: column; gap: 14px; padding: 16px; }
+.scan-top { display: flex; justify-content: space-between; align-items: center; }
+.qr-scan { position: relative; width: 100%; border-radius: 16px; overflow: hidden; background: #000; }
+.qr-scan video { width: 100%; display: block; max-height: 62vh; object-fit: cover; }
+.punch-actions { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.punch-big { min-height: 72px; font-size: 17px; font-weight: 700; }
+
+/* kiosk: mały żółty kod i tryb prywatny */
+.kiosk-private-qr { display: flex; gap: 12px; align-items: center; text-align: left; border: 3px solid #f2b705; background: #fff8dc; border-radius: 14px; padding: 8px 14px 8px 8px; margin-top: 4px; }
+.qr-mini { width: 120px; height: 120px; flex: 0 0 120px; }
+.qr-mini svg { width: 100%; height: 100%; display: block; }
+.kiosk-cam-head { display: flex; justify-content: space-between; align-items: center; }
+.kiosk-private-btn { width: 100%; min-height: 56px; font-size: 17px; font-weight: 700; background: #3a3420; color: #f2b705; border: 2px solid #f2b705; }
+.kiosk-private-btn.armed { background: #f2b705; color: #2b2100; }
+.kiosk .qr-box { width: min(48vh, 100%); }

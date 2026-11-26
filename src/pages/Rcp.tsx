@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { useApp } from '../data/AppContext';
 import { deletePunch, savePunch, usePunches } from '../data/punches';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
-import { checkDay, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
+import { checkDay, DIR_LABEL, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { DayCheck, Punch } from '../domain/punches';
 import { LineOptions, TypeTag } from '../ui';
 import { WorkerEditor } from './Pracownicy';
@@ -214,7 +214,10 @@ export default function Rcp() {
                   <td>{r.plan ? fmtRange(r.plan.start, r.plan.end - r.plan.start) : '—'}</td>
                   <td style={{ color: r.lateMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.firstIn)}</td>
                   <td style={{ color: r.earlyMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.lastOut)}</td>
-                  <td>{r.worked ? `${Math.floor(r.worked)} h ${String(Math.round((r.worked % 1) * 60)).padStart(2, '0')} min` : '—'}</td>
+                  <td>
+                    {r.worked ? `${Math.floor(r.worked)} h ${String(Math.round((r.worked % 1) * 60)).padStart(2, '0')} min` : '—'}
+                    {r.privateMin > 0 && <div className="sub" style={{ color: 'var(--amber-ink)' }}>{t('prywatne')} −{r.privateMin} min</div>}
+                  </td>
                   <td>
                     <span className={`tag ${STATUS_TONE[r.status]}`}>
                       {r.absence ? t(r.absence.reason) : t(STATUS_LABEL[r.status])}
@@ -225,8 +228,8 @@ export default function Rcp() {
                   <td>
                     <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                       {r.punches.map((p) => (
-                        <span key={p.id} className="tag" title={p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : `${t('kiosk')}: ${p.kiosk ?? ''}`}>
-                          {p.dir === 'in' ? '→' : '←'} {fmtMin(p.min)}{p.date !== date ? ` (${fmtDate(p.date)})` : ''}{p.source === 'manual' ? ' ✎' : p.source === 'plan' ? ' ✓' : ''}
+                        <span key={p.id} className={`tag ${p.dir === 'private_out' ? 'amber' : ''}`} title={`${t(DIR_LABEL[p.ret ? 'return' : p.dir])} · ${p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : p.source === 'badge' ? t('karta RCP') : `${t('kiosk')}: ${p.kiosk ?? ''}`}`}>
+                          {p.dir === 'private_out' ? '↗' : p.dir === 'in' ? (p.ret ? '↩' : '→') : '←'} {fmtMin(p.min)}{p.date !== date ? ` (${fmtDate(p.date)})` : ''}{p.source === 'manual' ? ' ✎' : p.source === 'plan' ? ' ✓' : ''}
                           {canEdit && (
                             <button type="button" className="btn small ghost" style={{ padding: '0 4px' }} aria-label={t('Usuń odbicie')} onClick={() => void remove(r, p)}>×</button>
                           )}
@@ -246,7 +249,7 @@ export default function Rcp() {
           </table>
         </div>
         <div className="sub" style={{ marginTop: 8 }}>
-          {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie, ✓ = zatwierdzone wg grafiku.')}
+          {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie, ✓ = zatwierdzone wg grafiku, ↗ = wyjście prywatne, ↩ = powrót.')}
         </div>
       </section>
       {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}

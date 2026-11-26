@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { plannedShift } from './coverage';
 import { addDays } from './dates';
-import { checkDay, planPunches, suggestDir } from './punches';
+import { checkDay, decideDir, planPunches, segments, suggestDir } from './punches';
 import type { Punch } from './punches';
 import { rotaCell } from './rota';
 import { emptyState } from './seed';
@@ -26,7 +26,7 @@ function setup(pattern: 'p8' | 'p12', wantStart: number, nextOff = false): { s: 
 }
 
 let n = 0;
-function punch(day: string, hour: number, dir: 'in' | 'out'): Punch {
+function punch(day: string, hour: number, dir: Punch['dir']): Punch {
   const d = addDays(day, Math.floor(hour / 24));
   const min = Math.round((hour - Math.floor(hour / 24) * 24) * 60);
   const at = `${d}T${String(Math.floor(min / 60)).padStart(2, '0')}:${String(min % 60).padStart(2, '0')}:00Z`;
@@ -97,5 +97,25 @@ describe('RCP: plan a odbicia', () => {
     // po uzupełnieniu dzień jest OK
     const filled = all.map((p, i) => ({ ...p, id: `x${i}`, at: `${p.date}T00:00:00Z` }));
     expect(checkDay(s, w, day, filled).status).toBe('ok');
+  });
+
+  it('wyjście prywatne nie wlicza się do czasu pracy; dzień z dwoma wyjściami prywatnymi', () => {
+    const day = '2026-12-01';
+    const ps = [punch(day, 7, 'in'), punch(day, 10, 'private_out'), punch(day, 10.5, 'in'), punch(day, 12, 'private_out'), punch(day, 12.25, 'in'), punch(day, 15, 'out')];
+    const r = segments(ps, day);
+    expect(r.worked).toBeCloseTo(8 - 0.75);
+    expect(r.privateMin).toBe(45);
+  });
+
+  it('serwer sam decyduje: wejście → wyjście, prywatne → powrót, podwójny skan to powtórzenie', () => {
+    const at = (iso: string, dir: Punch['dir']): Punch => ({ id: iso, workerId: 'w', at: iso, date: iso.slice(0, 10), min: 0, dir, source: 'qr' });
+    expect(decideDir(undefined, 'normal', '2026-12-01T06:00:00Z')).toEqual({ dir: 'in' });
+    expect(decideDir(at('2026-12-01T06:00:00Z', 'in'), 'normal', '2026-12-01T14:00:00Z')).toEqual({ dir: 'out' });
+    expect(decideDir(at('2026-12-01T06:00:00Z', 'in'), 'private', '2026-12-01T09:00:00Z')).toEqual({ dir: 'private_out' });
+    expect(decideDir(at('2026-12-01T09:00:00Z', 'private_out'), 'normal', '2026-12-01T09:30:00Z')).toEqual({ dir: 'in', ret: true });
+    expect(decideDir(at('2026-12-01T14:00:00Z', 'out'), 'private', '2026-12-01T15:00:00Z')).toEqual({ error: 'not_in' });
+    expect(decideDir(at('2026-12-01T06:00:00Z', 'in'), 'normal', '2026-12-01T06:00:30Z')).toHaveProperty('duplicate');
+    // zapomniane wyjście: po 16 h następny skan to nowe wejście
+    expect(decideDir(at('2026-12-01T06:00:00Z', 'in'), 'normal', '2026-12-02T06:00:00Z')).toEqual({ dir: 'in' });
   });
 });

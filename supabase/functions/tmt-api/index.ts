@@ -5,7 +5,11 @@
 //   notify — wysyłka powiadomień do pracowników (tylko admin/edytor) {items:[{workerId, pl:{title,body}, zh:{title,body}}]}
 //   test   — powiadomienie testowe na własne urządzenia zalogowanego
 //   kiosk  — kod QR kiosku RCP (ważny 60 s) i ostatnie odbicia (admin/edytor/kiosk)
-//   punch  — odbicie pracownika po zeskanowaniu QR {k, dir: 'in'|'out'}; czas bierze serwer
+//   punch  — pracownik zeskanował kod kiosku {k, p?: 1 (wyjście prywatne)}; kierunek i czas ustala serwer
+//   kiosk_scan — tablet zeskanował kartę lub kod z telefonu pracownika {code, private?}
+//   my_qr  — krótkotrwały kod pracownika do pokazania tabletowi
+//   badges — kody kart QR do wydruku (admin/edytor) {workerIds}
+//   unpunch — cofnięcie pomyłkowego odbicia w ciągu 2 min {id}
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
 
@@ -128,6 +132,42 @@ function localParts(d: Date): { date: string; min: number } {
   return { date: `${p.year}-${p.month}-${p.day}`, min: Number(p.hour) * 60 + Number(p.minute) };
 }
 
+// ---------- wspólne zapisywanie odbicia ----------
+const DOUBLE_SCAN_MS = 60_000;
+const OPEN_SHIFT_MS = 16 * 3600_000;
+const UNDO_MS = 120_000;
+type Dir = 'in' | 'out' | 'private_out';
+interface PunchRow { id: string; workerId: string; at: string; date: string; min: number; dir: Dir; ret?: boolean; source: string; kiosk?: string }
+
+/** Ta sama reguła co decideDir w src/domain/punches.ts — kierunek ustala serwer. */
+function decide(last: PunchRow | undefined, mode: 'normal' | 'private', now: Date): { dir: Dir; ret?: boolean } | { duplicate: PunchRow } | { error: string } {
+  const ago = last ? now.getTime() - Date.parse(last.at) : Infinity;
+  if (last && ago < DOUBLE_SCAN_MS) return { duplicate: last };
+  const open = !!last && ago < OPEN_SHIFT_MS && last.dir !== 'out';
+  if (mode === 'private') return open && last!.dir === 'in' ? { dir: 'private_out' } : { error: 'not_in' };
+  if (open && last!.dir === 'private_out') return { dir: 'in', ret: true };
+  return open ? { dir: 'out' } : { dir: 'in' };
+}
+
+async function workerName(id: string): Promise<string> {
+  const { data } = await admin.from('records').select('data').eq('kind', 'workers').eq('id', id).maybeSingle();
+  return (data?.data as { name?: string } | undefined)?.name ?? '?';
+}
+
+async function record(workerId: string, mode: 'normal' | 'private', source: string, kiosk: string, by: string) {
+  const now = new Date();
+  const { data: last } = await admin.from('records').select('data').eq('kind', 'punches').eq('data->>workerId', workerId).order('data->>at', { ascending: false }).limit(1).maybeSingle();
+  const d = decide(last?.data as PunchRow | undefined, mode, now);
+  const name = await workerName(workerId);
+  if ('error' in d) return json({ error: d.error, name }, 400);
+  if ('duplicate' in d) return json({ ok: true, duplicate: true, name, ...d.duplicate });
+  const id = crypto.randomUUID();
+  const punch: PunchRow = { id, workerId, at: now.toISOString(), ...localParts(now), dir: d.dir, ...(d.ret ? { ret: true } : {}), source, kiosk };
+  const { error } = await admin.from('records').insert({ kind: 'punches', id, data: punch, updated_by: by });
+  if (error) return json({ error: error.message }, 500);
+  return json({ ok: true, name, ...punch });
+}
+
 async function recentPunches(limit = 12) {
   const since = new Date(Date.now() - 16 * 3600_000).toISOString();
   const { data } = await admin.from('records').select('data').eq('kind', 'punches').gte('data->>at', since).order('data->>at', { ascending: false }).limit(limit);
@@ -135,7 +175,7 @@ async function recentPunches(limit = 12) {
   const ids = [...new Set(rows.map((r) => String(r.workerId)))];
   const { data: ws } = ids.length ? await admin.from('records').select('id,data').eq('kind', 'workers').in('id', ids) : { data: [] };
   const names = new Map((ws ?? []).map((w: { id: string; data: { name: string } }) => [w.id, w.data.name]));
-  return rows.map((r) => ({ at: r.at, dir: r.dir, name: names.get(String(r.workerId)) ?? '?' }));
+  return rows.map((r) => ({ id: r.id, at: r.at, dir: r.dir, ret: r.ret, name: names.get(String(r.workerId)) ?? '?' }));
 }
 
 Deno.serve(async (req) => {
@@ -218,18 +258,71 @@ Deno.serve(async (req) => {
         if (!me?.worker_id || me.role !== 'employee') return json({ error: 'not_employee' }, 403);
         const kiosk = await checkToken(String(body.k ?? ''));
         if (!kiosk) return json({ error: 'expired' }, 400);
-        const dir = body.dir === 'out' ? 'out' : body.dir === 'in' ? 'in' : null;
-        if (!dir) return json({ error: 'invalid_input' }, 400);
-        const now = new Date();
-        // podwójne zeskanowanie w ciągu 2 minut nie tworzy drugiego odbicia
-        const { data: last } = await admin.from('records').select('data').eq('kind', 'punches').eq('data->>workerId', me.worker_id).order('data->>at', { ascending: false }).limit(1).maybeSingle();
-        const prev = last?.data as { at: string; dir: string } | undefined;
-        if (prev && prev.dir === dir && now.getTime() - new Date(prev.at).getTime() < 120_000) return json({ ok: true, duplicate: true, ...prev });
-        const id = crypto.randomUUID();
-        const punch = { id, workerId: me.worker_id, at: now.toISOString(), ...localParts(now), dir, source: 'qr', kiosk };
-        const { error } = await admin.from('records').insert({ kind: 'punches', id, data: punch, updated_by: email });
-        if (error) return json({ error: error.message }, 500);
-        return json({ ok: true, ...punch });
+        return await record(me.worker_id, body.p ? 'private' : 'normal', 'qr', kiosk, email);
+      }
+
+      case 'my_qr': {
+        const email = await callerEmail(req);
+        if (!email) return json({ error: 'unauthorized' }, 401);
+        const { data: me } = await admin.from('allowed_users').select('role,worker_id').eq('email', email).maybeSingle();
+        if (!me?.worker_id || me.role !== 'employee') return json({ error: 'not_employee' }, 403);
+        const ts = Math.floor(Date.now() / 1000);
+        return json({ qr: `TMTW:${me.worker_id}.${ts}.${await sign(`W.${me.worker_id}.${ts}`)}`, ttl: TOKEN_TTL });
+      }
+
+      case 'kiosk_scan': {
+        const email = await callerEmail(req);
+        const role = email ? await roleOf(email) : null;
+        if (role !== 'admin' && role !== 'editor' && role !== 'kiosk') return json({ error: 'forbidden' }, 403);
+        const code = String(body.code ?? '').trim();
+        let workerId: string | null = null;
+        if (code.startsWith('TMTB:')) {
+          const { data } = await admin.from('badges').select('worker_id').eq('code', code.slice(5)).maybeSingle();
+          workerId = data?.worker_id ?? null;
+          if (!workerId) return json({ error: 'unknown_badge' }, 400);
+        } else if (code.startsWith('TMTW:')) {
+          const [wid, ts, sig] = code.slice(5).split('.');
+          const age = Math.floor(Date.now() / 1000) - Number(ts);
+          if (!wid || !(age >= -5 && age <= TOKEN_TTL) || (await sign(`W.${wid}.${ts}`)) !== sig) return json({ error: 'expired' }, 400);
+          workerId = wid;
+        } else return json({ error: 'not_tmt' }, 400);
+        return await record(workerId, body.private ? 'private' : 'normal', code.startsWith('TMTB:') ? 'badge' : 'qr', String(body.kiosk ?? 'wejscie'), email!);
+      }
+
+      case 'badges': {
+        const email = await callerEmail(req);
+        const role = email ? await roleOf(email) : null;
+        if (role !== 'admin' && role !== 'editor') return json({ error: 'forbidden' }, 403);
+        const ids = (Array.isArray(body.workerIds) ? body.workerIds : []).map(String).slice(0, 500);
+        const renew = !!body.renew;
+        const { data: have } = await admin.from('badges').select('worker_id,code').in('worker_id', ids);
+        const map = new Map((have ?? []).map((b: { worker_id: string; code: string }) => [b.worker_id, b.code]));
+        const ABC = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        const fresh = ids.filter((id) => renew || !map.has(id)).map((id) => {
+          const code = Array.from(crypto.getRandomValues(new Uint8Array(16)), (b) => ABC[b % ABC.length]).join('');
+          map.set(id, code);
+          return { worker_id: id, code };
+        });
+        if (fresh.length) {
+          const { error } = await admin.from('badges').upsert(fresh);
+          if (error) return json({ error: error.message }, 500);
+        }
+        return json({ badges: ids.map((id) => ({ workerId: id, qr: `TMTB:${map.get(id)}` })) });
+      }
+
+      case 'unpunch': {
+        const email = await callerEmail(req);
+        if (!email) return json({ error: 'unauthorized' }, 401);
+        const { data: me } = await admin.from('allowed_users').select('role,worker_id').eq('email', email).maybeSingle();
+        const { data: row } = await admin.from('records').select('data').eq('kind', 'punches').eq('id', String(body.id ?? '')).maybeSingle();
+        const p = row?.data as PunchRow | undefined;
+        if (!p) return json({ error: 'not_found' }, 404);
+        const mine = me?.role === 'employee' && me.worker_id === p.workerId;
+        const kioskRole = me?.role === 'kiosk' || me?.role === 'admin' || me?.role === 'editor';
+        if (!mine && !kioskRole) return json({ error: 'forbidden' }, 403);
+        if (Date.now() - Date.parse(p.at) > UNDO_MS) return json({ error: 'too_late' }, 400);
+        await admin.from('records').delete().eq('kind', 'punches').eq('id', p.id);
+        return json({ ok: true });
       }
 
       default:

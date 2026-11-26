@@ -1,4 +1,8 @@
-import PunchPanel, { clearScan, scannedToken } from './PunchPanel';
+import PunchPanel, { clearScan, parseScan, scannedToken } from './PunchPanel';
+import type { Scan } from './PunchPanel';
+import QrScan from '../rcp/QrScan';
+import { callApi } from '../rcp/api';
+import qrcode from 'qrcode-generator';
 import { usePunches } from '../data/punches';
 import { checkDay, fmtMin, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import { useEffect, useMemo, useState } from 'react';
@@ -108,6 +112,45 @@ function PushCard() {
   );
 }
 
+/** Krótkotrwały kod pracownika do pokazania kamerze tabletu (odświeża się co 20 s). */
+function MyQr({ onClose }: { onClose: () => void }) {
+  const { backend } = useApp();
+  const [svg, setSvg] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  useEffect(() => {
+    const db = backend.client;
+    if (!db) return;
+    let stop = false;
+    const load = async () => {
+      const r = await callApi<{ qr?: string }>(db, { action: 'my_qr' });
+      if (stop) return;
+      if (!r.qr) return setErr(t('Nie udało się pobrać kodu.'));
+      const q = qrcode(0, 'M');
+      q.addData(r.qr);
+      q.make();
+      setSvg(q.createSvgTag({ cellSize: 8, margin: 2, scalable: true }));
+      setErr(null);
+    };
+    void load();
+    const id = window.setInterval(() => void load(), 20_000);
+    return () => {
+      stop = true;
+      window.clearInterval(id);
+    };
+  }, [backend]);
+  return (
+    <div className="scan-overlay" onClick={onClose}>
+      <div className="scan-top">
+        <b>{t('Pokaż ten kod kamerze tabletu')}</b>
+        <button type="button" className="btn small">{t('Zamknij')}</button>
+      </div>
+      <div className="qr-box" style={{ background: '#fff', borderRadius: 16, padding: 12, maxWidth: 360, margin: '0 auto' }} dangerouslySetInnerHTML={{ __html: svg }} />
+      {err && <div className="note red">{err}</div>}
+      <div className="sub" style={{ color: '#c9d3e6' }}>{t('Kod zmienia się co 20 s — zrzut ekranu nie zadziała.')}</div>
+    </div>
+  );
+}
+
 function MyPunches({ w }: { w: Worker }) {
   const { state } = useApp();
   const today = todayIso();
@@ -137,7 +180,9 @@ function MyPunches({ w }: { w: Worker }) {
 
 export default function EmployeeApp({ previewId }: { previewId?: string }) {
   const { state, backend, user, reload } = useApp();
-  const [scan, setScan] = useState<string | null>(() => (previewId ? null : scannedToken()));
+  const [scan, setScan] = useState<Scan | null>(() => (previewId ? null : scannedToken()));
+  const [camera, setCamera] = useState(false);
+  const [myQr, setMyQr] = useState(false);
   useEffect(() => {
     if (previewId) return;
     const on = () => setScan(scannedToken());
@@ -204,12 +249,40 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
           <>
             {scan && (
               <PunchPanel
-                token={scan}
+                scan={scan}
                 onDone={() => {
                   clearScan();
                   setScan(null);
                 }}
               />
+            )}
+            {camera && !scan && (
+              <div className="scan-overlay">
+                <div className="scan-top">
+                  <b>{t('Zeskanuj kod z ekranu przy wejściu')}</b>
+                  <button type="button" className="btn small" onClick={() => setCamera(false)}>{t('Zamknij')}</button>
+                </div>
+                <QrScan
+                  onCode={(text) => {
+                    const s = parseScan(text);
+                    if (!s) return;
+                    setCamera(false);
+                    setScan(s);
+                  }}
+                />
+                <div className="sub" style={{ color: '#c9d3e6' }}>{t('Odbicie zapisze się samo — nic więcej nie trzeba klikać.')}</div>
+              </div>
+            )}
+            {myQr && <MyQr onClose={() => setMyQr(false)} />}
+            {!previewId && (
+              <section className="punch-actions">
+                <button type="button" className="btn primary punch-big" onClick={() => setCamera(true)}>
+                  📷 {t('Odbij się — skanuj kod')}
+                </button>
+                <button type="button" className="btn punch-big" onClick={() => setMyQr(true)}>
+                  ▦ {t('Mój kod do tabletu')}
+                </button>
+              </section>
             )}
             <section className="card">
               <div className="sub">{previewId ? `${t('Podgląd aplikacji pracownika')} · ${w.email ?? ''}` : user}</div>

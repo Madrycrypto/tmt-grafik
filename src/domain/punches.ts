@@ -11,8 +11,10 @@ export interface Punch {
   date: string;
   /** minuty od północy dnia date */
   min: number;
-  dir: 'in' | 'out';
-  source: 'qr' | 'manual' | 'plan' | 'tna';
+  /** private_out = wyjście prywatne; powrót z niego to zwykłe 'in' z ret = true */
+  dir: 'in' | 'out' | 'private_out';
+  ret?: boolean;
+  source: 'qr' | 'badge' | 'manual' | 'plan' | 'tna';
   kiosk?: string;
   note?: string;
 }
@@ -35,8 +37,10 @@ export interface DayCheck {
   lastOut?: number;
   lateMin: number;
   earlyMin: number;
-  /** czas między pierwszym wejściem a ostatnim wyjściem, w godzinach */
+  /** czas pracy w godzinach: suma odcinków wejście → wyjście, bez wyjść prywatnych */
   worked: number;
+  /** łączny czas wyjść prywatnych w minutach */
+  privateMin: number;
   status: DayStatus;
 }
 
@@ -72,7 +76,7 @@ export function checkDay(state: AppState, w: Worker, date: string, all: Punch[],
   const outs = punches.filter((p) => p.dir === 'out').map((p) => relHour(p, date));
   const firstIn = ins.length ? Math.min(...ins) : undefined;
   const lastOut = outs.length ? Math.max(...outs) : undefined;
-  const worked = firstIn !== undefined && lastOut !== undefined && lastOut > firstIn ? lastOut - firstIn : 0;
+  const { worked, privateMin } = segments(punches, date);
   const tol = TOLERANCE_MIN / 60;
   const lateMin = plan && firstIn !== undefined && firstIn > plan.start + tol ? Math.round((firstIn - plan.start) * 60) : 0;
   const earlyMin = plan && lastOut !== undefined && lastOut < plan.end - tol ? Math.round((plan.end - lastOut) * 60) : 0;
@@ -87,7 +91,50 @@ export function checkDay(state: AppState, w: Worker, date: string, all: Punch[],
   else if (lateMin) status = 'late';
   else if (earlyMin) status = 'early';
   else status = 'ok';
-  return { worker: w, date, plan, absence, punches, firstIn, lastOut, lateMin, earlyMin, worked, status };
+  return { worker: w, date, plan, absence, punches, firstIn, lastOut, lateMin, earlyMin, worked, privateMin, status };
+}
+
+/** Suma odcinków pracy (wejście → wyjście lub wyjście prywatne) i czas wyjść prywatnych. */
+export function segments(punches: Punch[], date: string): { worked: number; privateMin: number } {
+  let worked = 0;
+  let priv = 0;
+  let inAt: number | undefined;
+  let privAt: number | undefined;
+  for (const p of [...punches].sort((a, b) => a.at.localeCompare(b.at))) {
+    const h = relHour(p, date);
+    if (p.dir === 'in') {
+      if (privAt !== undefined) priv += h - privAt;
+      privAt = undefined;
+      if (inAt === undefined) inAt = h;
+    } else {
+      if (inAt !== undefined) worked += h - inAt;
+      inAt = undefined;
+      privAt = p.dir === 'private_out' ? h : undefined;
+    }
+  }
+  return { worked, privateMin: Math.round(priv * 60) };
+}
+
+/** Okno, w którym kolejne zeskanowanie traktujemy jako pomyłkowe powtórzenie. */
+export const DOUBLE_SCAN_MS = 60_000;
+/** Po tylu godzinach od wejścia bez wyjścia następny skan to znowu wejście (zapomniane wyjście). */
+const OPEN_SHIFT_H = 16;
+
+export type PunchMode = 'normal' | 'private';
+export type DecideResult = { dir: Punch['dir']; ret?: boolean } | { duplicate: Punch } | { error: 'not_in' };
+
+/**
+ * Co oznacza skan: serwer decyduje sam, pracownik nic nie wybiera.
+ * Normalny kod: po wejściu → wyjście; po wyjściu prywatnym → powrót; inaczej → wejście.
+ * Kod „wyjście prywatne”: tylko gdy pracownik jest na terenie.
+ */
+export function decideDir(last: Punch | undefined, mode: PunchMode, nowIso: string): DecideResult {
+  const ago = last ? Date.parse(nowIso) - Date.parse(last.at) : Infinity;
+  if (last && ago < DOUBLE_SCAN_MS) return { duplicate: last };
+  const open = !!last && ago < OPEN_SHIFT_H * 3600_000 && last.dir !== 'out';
+  if (mode === 'private') return open && last!.dir === 'in' ? { dir: 'private_out' } : { error: 'not_in' };
+  if (open && last!.dir === 'private_out') return { dir: 'in', ret: true };
+  return open ? { dir: 'out' } : { dir: 'in' };
 }
 
 /** Kierunek, który pracownik najpewniej chce odbić: po wejściu — wyjście. */
@@ -95,8 +142,15 @@ export function suggestDir(mine: Punch[], nowIso: string): 'in' | 'out' {
   const last = [...mine].sort((a, b) => b.at.localeCompare(a.at))[0];
   if (!last) return 'in';
   const hours = (Date.parse(nowIso) - Date.parse(last.at)) / 3600_000;
-  return last.dir === 'in' && hours < 16 ? 'out' : 'in';
+  return last.dir !== 'out' && hours < 16 ? 'out' : 'in';
 }
+
+export const DIR_LABEL: Record<Punch['dir'] | 'return', string> = {
+  in: 'Wejście',
+  out: 'Wyjście',
+  private_out: 'Wyjście prywatne',
+  return: 'Powrót',
+};
 
 export const STATUS_LABEL: Record<DayStatus, string> = {
   ok: 'OK',

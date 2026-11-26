@@ -9,7 +9,8 @@ import { useApp } from '../data/AppContext';
 import { Icon, Sheet, TypeTag, LineOptions } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
-import { inviteWorkers, printCards, revokeWorker, useAccounts } from './Invites';
+import { inviteWorkers, printBadges, printCards, revokeWorker, useAccounts } from './Invites';
+import { callApi } from '../rcp/api';
 import type { Account, InviteResult } from './Invites';
 import { t } from '../i18n';
 
@@ -371,6 +372,17 @@ export default function Pracownicy() {
     printCards(state, rows);
   };
 
+  const badges = async (renew: boolean) => {
+    const db = backend.client;
+    if (!db) return;
+    const who = (selected.size ? state.workers.filter((w) => selected.has(w.id)) : list).filter((w) => w.active);
+    if (!who.length) return;
+    if (renew && !confirm(t('Wydać nowe karty dla {n} os.? Stare karty tych osób przestaną działać.', { n: who.length }))) return;
+    const r = await callApi<{ badges?: { workerId: string; qr: string }[] }>(db, { action: 'badges', workerIds: who.map((w) => w.id), renew });
+    if (!r.badges) return setInviteInfo(t('Nie udało się pobrać kart: {e}', { e: r.error ?? '' }));
+    printBadges(state, r.badges.map((b) => ({ worker: who.find((w) => w.id === b.workerId)!, qr: b.qr })));
+  };
+
   const list = useMemo(
     () =>
       state.workers
@@ -435,6 +447,16 @@ export default function Pracownicy() {
           {acc.enabled && (
             <button type="button" className="btn" onClick={reprint}>
               {t('Kartki z kodami')}
+            </button>
+          )}
+          {backend.client && (
+            <button type="button" className="btn" title={t('Karty z kodem QR do pokazania kamerze tabletu przy wejściu (zaznaczeni albo widoczni na liście)')} onClick={() => void badges(false)}>
+              {t('Karty RCP')}
+            </button>
+          )}
+          {backend.client && selected.size > 0 && (
+            <button type="button" className="btn ghost" title={t('Unieważnia stare karty zaznaczonych (np. zgubiona karta)')} onClick={() => void badges(true)}>
+              {t('Nowa karta')}
             </button>
           )}
         </div>

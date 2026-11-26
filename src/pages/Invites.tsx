@@ -138,3 +138,46 @@ ol { padding-left: 4mm; margin: 2mm 0; font-size: 8pt; } .url { font-size: 7.5pt
   win.document.write(html);
   win.document.close();
 }
+
+/**
+ * Karty RCP do wydruku (format karty kredytowej, 2 kolumny): kod QR karty pokazuje się
+ * kamerze tabletu przy wejściu. Kod jest tajny — kartę zgubioną unieważnia „nowa karta”.
+ */
+export function printBadges(state: AppState, items: { worker: Worker; qr: string }[]): void {
+  const cards = items
+    .map(({ worker, qr: text }) => {
+      const qr = qrcode(0, 'M');
+      qr.addData(text);
+      qr.make();
+      const line = state.lines.find((l) => l.id === worker.lineId);
+      return `<div class="card">
+  <div class="qr">${qr.createSvgTag({ cellSize: 3, margin: 0, scalable: true })}</div>
+  <div class="txt">
+    <div class="brand">TMT · RCP</div>
+    <div class="name">${esc(worker.name)}</div>
+    <div class="meta">${esc([line?.group, line?.name].filter(Boolean).join(' · '))} · ${esc(t('Brygada'))} ${worker.brigade}</div>
+    <div class="how">Pokaż kod kamerze tabletu przy wejściu · 在入口平板摄像头前出示此码</div>
+  </div>
+</div>`;
+    })
+    .join('\n');
+  const html = `<!doctype html><html lang="pl"><head><meta charset="utf-8"><title>TMT — karty RCP</title>
+<style>
+@page { size: A4; margin: 10mm; }
+body { margin: 0; font-family: Arial, 'Microsoft YaHei', 'PingFang SC', sans-serif; color: #111; }
+.grid { display: grid; grid-template-columns: 85.6mm 85.6mm; gap: 6mm; justify-content: center; }
+.card { width: 85.6mm; height: 54mm; border: 1px solid #999; border-radius: 3mm; padding: 4mm; display: flex; gap: 4mm; break-inside: avoid; box-sizing: border-box; }
+.qr { width: 38mm; flex: 0 0 38mm; } .qr svg { width: 38mm; height: 38mm; }
+.txt { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.brand { font-size: 8pt; color: #2457d6; font-weight: bold; letter-spacing: 1px; }
+.name { font-size: 13pt; font-weight: bold; margin-top: 2mm; } .meta { color: #555; font-size: 8.5pt; }
+.how { margin-top: auto; font-size: 7.5pt; color: #444; }
+</style></head><body><div class="grid">${cards}</div><script>window.onload=()=>setTimeout(()=>window.print(),300)</script></body></html>`;
+  const win = window.open('', '_blank');
+  if (!win) {
+    alert(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'));
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+}

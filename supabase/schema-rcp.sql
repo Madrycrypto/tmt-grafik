@@ -9,3 +9,12 @@ alter table public.allowed_users add constraint allowed_users_role_check
 
 create index if not exists records_punches_at on public.records ((data ->> 'at')) where kind = 'punches';
 create index if not exists records_punches_worker on public.records ((data ->> 'workerId'), (data ->> 'at')) where kind = 'punches';
+
+-- karty QR pracowników (wydruk albo kod w aplikacji) skanowane kamerą tabletu;
+-- kod znają tylko funkcja tmt-api i wydruk — brak polityk RLS = brak dostępu z aplikacji
+create table if not exists public.badges (
+  worker_id text primary key,
+  code text unique not null,
+  created_at timestamptz not null default now()
+);
+alter table public.badges enable row level security;
