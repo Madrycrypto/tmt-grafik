@@ -1,7 +1,6 @@
 import { lineStatus, level, plannedShift, absenceOn } from './coverage';
 import { daysBetween, monthDays } from './dates';
-import { hrSummary } from './hrExport';
-import { monthNorm } from './norm';
+import { patternPeriod, workerPattern, workerPeriod } from './settlement';
 import { restCheck } from './replacement';
 import { rotaCell, shiftDef } from './rota';
 import { linePatterns, patternBrigades } from './types';
@@ -21,15 +20,20 @@ export interface WorkerDeficit {
   planned: number;
   norm: number;
   missing: number;
+  /** miesiące okresu rozliczeniowego pracownika, w których można dopełnić godziny */
+  months: string[];
 }
 
-/** Ludzie, którym w miesiącu brakuje godzin do wymiaru czasu pracy. */
+/** Ludzie, którym w okresie rozliczeniowym (zawierającym `month`) brakuje godzin do wymiaru. */
 export function deficits(state: AppState, month: string, workers?: Worker[]): WorkerDeficit[] {
-  const norm = monthNorm(month).hours;
   const ids = workers ? new Set(workers.map((w) => w.id)) : null;
-  return hrSummary(state, { month, lineId: 'all', who: 'all', includeInactive: false })
-    .filter((r) => r.worker.active && (!ids || ids.has(r.worker.id)))
-    .map((r) => ({ worker: r.worker, planned: r.hours, norm, missing: norm - r.hours }))
+  return state.workers
+    .filter((w) => w.active && (!ids || ids.has(w.id)))
+    .map((w) => {
+      const months = patternPeriod(workerPattern(state, w), month);
+      const b = workerPeriod(state, w, months);
+      return { worker: w, planned: b.hours, norm: b.norm, missing: -b.diff, months };
+    })
     .filter((d) => d.missing > 0)
     .sort((a, b) => b.missing - a.missing);
 }
@@ -54,7 +58,9 @@ export function lineWindows(state: AppState, lineId: string, date: string): { st
  */
 export function fillProposals(state: AppState, month: string, opts: { from?: string; workers?: Worker[] } = {}): { deficits: WorkerDeficit[]; proposals: FillProposal[] } {
   const defs = deficits(state, month, opts.workers);
-  const days = monthDays(month).filter((d) => !opts.from || d >= opts.from);
+  // dni całych okresów rozliczeniowych osób z niedoborem (od dziś)
+  const months = [...new Set([month, ...defs.flatMap((d) => d.months)])].sort();
+  const days = months.flatMap((m) => monthDays(m)).filter((d) => !opts.from || d >= opts.from);
   // luki: klucz dzień|linia|stanowisko|start → ile osób brakuje
   const gaps = new Map<string, { date: string; lineId: string; stationId: string; start: number; hours: number; need: number }>();
   for (const date of days) {
@@ -81,7 +87,7 @@ export function fillProposals(state: AppState, month: string, opts: { from?: str
     };
     for (const g of [...gaps.values()].sort((a, b) => a.date.localeCompare(b.date))) {
       if (missing <= 0) break;
-      if (g.need <= 0 || taken.has(g.date)) continue;
+      if (g.need <= 0 || taken.has(g.date) || !d.months.includes(g.date.slice(0, 7))) continue;
       const st = state.stations.find((s) => s.id === g.stationId)!;
       if (level(d.worker, st.id) < st.minLevel) continue;
       if (plannedShift(state, d.worker, g.date) || absenceOn(state, d.worker.id, g.date)) continue;

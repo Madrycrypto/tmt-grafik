@@ -55,4 +55,21 @@ describe('dopełnianie godzin na innych liniach', () => {
     const { s } = setup(2);
     expect(fillProposals(s, '2027-02').proposals).toEqual([]);
   });
+
+  it('w okresie 3-miesięcznym liczy brak za cały okres i dopełnia go w dowolnym miesiącu okresu', () => {
+    const { s } = setup(3);
+    const month = deficitsOf(s, '2027-02');
+    s.patterns.find((p) => p.id === 'sys3L_8_07')!.settlementMonths = 3;
+    const { deficits, proposals } = fillProposals(s, '2027-02');
+    const d = deficits.find((x) => x.worker.id === 'w')!;
+    expect(d.months).toEqual(['2027-01', '2027-02', '2027-03']);
+    expect(d.missing).toBeGreaterThan(month);
+    expect(proposals.reduce((h, p) => h + p.hours, 0)).toBeGreaterThan(month);
+    expect(proposals.some((p) => p.date.slice(0, 7) !== '2027-02')).toBe(true);
+    expect(proposals.every((p) => d.months.includes(p.date.slice(0, 7)))).toBe(true);
+  });
 });
+
+function deficitsOf(s: AppState, month: string): number {
+  return fillProposals(s, month).deficits.find((x) => x.worker.id === 'w')?.missing ?? 0;
+}

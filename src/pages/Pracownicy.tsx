@@ -1,5 +1,4 @@
-import { monthNorm } from '../domain/norm';
-import { hrSummary } from '../domain/hrExport';
+import { patternPeriod, workerPattern, workerPeriod } from '../domain/settlement';
 import WorkerHours from './WorkerHours';
 import { appUrl } from '../data/backend';
 import { toast } from '../toast';
@@ -422,11 +421,10 @@ export default function Pracownicy() {
     printBadges(state, r.badges.map((b) => ({ worker: who.find((w) => w.id === b.workerId)!, qr: b.qr })));
   };
 
-  // bilans godzin w bieżącym miesiącu (ujemny = do odrobienia)
+  // bilans godzin w bieżącym okresie rozliczeniowym (ujemny = do odrobienia)
   const balance = useMemo(() => {
     const month = todayIso().slice(0, 7);
-    const norm = monthNorm(month).hours;
-    return new Map(hrSummary(state, { month, lineId: 'all', who: 'all', includeInactive: false }).map((r) => [r.worker.id, r.hours - norm]));
+    return new Map(state.workers.filter((w) => w.active).map((w) => [w.id, workerPeriod(state, w, patternPeriod(workerPattern(state, w), month)).diff]));
   }, [state]);
 
   const list = useMemo(
@@ -599,7 +597,7 @@ export default function Pracownicy() {
             {acc.accounts.get(w.id)?.code && <span className="tag amber">{t('kod')}: {acc.accounts.get(w.id)!.code}</span>}
             {acc.accounts.has(w.id) && !acc.accounts.get(w.id)!.code && <span className="tag blue">{t('aplikacja')}</span>}
             {(balance.get(w.id) ?? 0) < 0 && (
-              <span className="tag red" title={t('Brakuje godzin do wymiaru w tym miesiącu — otwórz kartę, aby dodać zmianę na innej linii')}>
+              <span className="tag red" title={t('Brakuje godzin do wymiaru w okresie rozliczeniowym — otwórz kartę, aby dodać zmianę na innej linii')}>
                 {balance.get(w.id)} h
               </span>
             )}

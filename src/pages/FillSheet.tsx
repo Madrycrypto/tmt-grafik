@@ -12,7 +12,7 @@ export default function FillSheet({ month, workers, onClose }: { month: string; 
   const { state, update } = useApp();
   const today = todayIso();
   const { deficits, proposals } = useMemo(
-    () => fillProposals(state, month, { workers, from: month === today.slice(0, 7) ? today : undefined }),
+    () => fillProposals(state, month, { workers, from: today }),
     [state, month, workers, today],
   );
   const key = (i: number) => `${proposals[i].worker.id}|${proposals[i].date}`;
@@ -34,7 +34,7 @@ export default function FillSheet({ month, workers, onClose }: { month: string; 
 
   return (
     <Sheet title={t('Dopełnij godziny')} sub={t('Dodatkowe zmiany w dni wolne — tam, gdzie na innych liniach brakuje ludzi, a pracownik ma kwalifikacje (poziom ≥ min) i 11 h odpoczynku.')} onClose={onClose}>
-      {deficits.length === 0 && <div className="note green">{t('Nikomu z tej grupy nie brakuje godzin w tym miesiącu.')}</div>}
+      {deficits.length === 0 && <div className="note green">{t('Nikomu z tej grupy nie brakuje godzin w okresie rozliczeniowym.')}</div>}
       {deficits.map((d) => {
         const mine = proposals.map((p, i) => ({ p, i })).filter((x) => x.p.worker.id === d.worker.id);
         const covered = mine.filter((x) => !off.has(key(x.i))).reduce((h, x) => h + x.p.hours, 0);

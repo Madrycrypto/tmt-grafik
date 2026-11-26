@@ -4,8 +4,7 @@ import { setAssignment, stationName } from '../domain/actions';
 import { level, plannedShift, absenceOn } from '../domain/coverage';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { lineWindows } from '../domain/fill';
-import { hrSummary } from '../domain/hrExport';
-import { monthNorm } from '../domain/norm';
+import { patternPeriod, periodLabel, workerPattern, workerPeriod } from '../domain/settlement';
 import { restCheck } from '../domain/replacement';
 import type { Worker } from '../domain/types';
 import { toast } from '../toast';
@@ -19,10 +18,10 @@ export default function WorkerHours({ worker }: { worker: Worker }) {
   const { state, update, undo } = useApp();
   const today = todayIso();
   const [month, setMonth] = useState(today.slice(0, 7));
-  const norm = monthNorm(month);
-  const sum = useMemo(() => hrSummary(state, { month, lineId: 'all', who: 'all', includeInactive: true }).find((r) => r.worker.id === worker.id), [state, month, worker.id]);
-  const planned = sum?.hours ?? 0;
-  const diff = planned - norm.hours;
+  const period = patternPeriod(workerPattern(state, worker), month);
+  const bal = useMemo(() => workerPeriod(state, worker, period), [state, worker, period.join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const planned = bal.hours;
+  const diff = bal.diff;
 
   // pierwszy wolny dzień od jutra jako podpowiedź
   const firstFree = useMemo(() => {
@@ -79,17 +78,26 @@ export default function WorkerHours({ worker }: { worker: Worker }) {
   return (
     <div className="note stack" style={{ gap: 8 }}>
       <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center' }}>
-        <b>{t('Godziny w miesiącu')}</b>
+        <b>{period.length > 1 ? t('Godziny w okresie rozliczeniowym {p}', { p: periodLabel(period) }) : t('Godziny w miesiącu')}</b>
         <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} aria-label={t('Miesiąc')} style={{ width: 150 }} />
       </div>
       <div className="row" style={{ alignItems: 'center' }}>
         <span>
-          {planned} h / {norm.hours} h
+          {planned} h / {bal.norm} h
         </span>
         <span className={`tag ${diff < 0 ? 'red' : diff > 0 ? 'amber' : 'green'}`}>
           {diff === 0 ? t('zgodnie z wymiarem') : diff < 0 ? t('brakuje {h} h', { h: -diff }) : t('nadwyżka {h} h', { h: diff })}
         </span>
       </div>
+      {period.length > 1 && (
+        <div className="row" style={{ gap: 4 }}>
+          {bal.months.map((m) => (
+            <span key={m.month} className={`tag ${m.diff < 0 ? 'red' : m.diff > 0 ? 'amber' : 'green'}`} title={`${m.hours} h / ${m.norm} h`}>
+              {periodLabel([m.month])}: {m.diff === 0 ? '0' : `${m.diff > 0 ? '+' : '−'}${Math.abs(m.diff)}`} h
+            </span>
+          ))}
+        </div>
+      )}
 
       <b style={{ marginTop: 4 }}>{t('Dodatkowa zmiana na innej linii')}</b>
       <div className="row">

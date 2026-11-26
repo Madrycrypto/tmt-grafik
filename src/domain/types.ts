@@ -28,6 +28,10 @@ export interface Pattern {
   brigades?: BrigadeId[];
   /** czy w święta ustawowe linia nie pracuje; domyślnie tak dla systemów poniżej 4 brygad */
   holidaysOff?: boolean;
+  /** okres rozliczeniowy czasu pracy w miesiącach (1, 3, 4, 6, 12); domyślnie 1 */
+  settlementMonths?: number;
+  /** pierwszy miesiąc okresu rozliczeniowego, od którego liczą się kolejne okresy (RRRR-MM) */
+  settlementStart?: string;
 }
 
 export interface Exclusion {

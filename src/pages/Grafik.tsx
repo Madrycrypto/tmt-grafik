@@ -10,6 +10,7 @@ import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent } from '../ui';
 import { monthNorm } from '../domain/norm';
+import { patternPeriod, periodLabel, SETTLEMENT_OPTIONS } from '../domain/settlement';
 import HrExportSheet from './HrExport';
 import FillSheet from './FillSheet';
 import { t } from '../i18n';
@@ -53,6 +54,12 @@ export default function Grafik() {
     [state, pattern, month],
   );
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
+  // okres rozliczeniowy systemu: bilans liczony za wszystkie jego miesiące
+  const period = patternPeriod(pattern, month);
+  const periodSummaries = useMemo(
+    () => (pattern ? period.map((m) => ({ month: m, norm: monthNorm(m).hours, rows: summarize(state, pattern.id, m) })) : []),
+    [state, pattern, period.join()], // eslint-disable-line react-hooks/exhaustive-deps
+  );
   const [hr, setHr] = useState(false);
   const [fill, setFill] = useState(false);
 
@@ -241,8 +248,49 @@ export default function Grafik() {
 
       <section className="card">
         <div className="card-head">
-          <h2>{t('Bilans godzin')} — {month}</h2>
-          <span className="sub">{t('wymiar czasu pracy: {h} h ({d} dni roboczych × 8 h)', { h: norm.hours, d: norm.workdays })}</span>
+          <h2>
+            {t('Bilans godzin')} — {period.length > 1 ? periodLabel(period) : month}
+          </h2>
+          <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+            {t('Okres rozliczeniowy')}
+            <select
+              value={pattern.settlementMonths ?? 1}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                update((d) => {
+                  const p = d.patterns.find((x) => x.id === pattern.id)!;
+                  p.settlementMonths = n;
+                  if (n === 1) delete p.settlementStart;
+                }, `Okres rozliczeniowy ${pattern.name}: ${n} mies.`);
+                toast(t('Okres rozliczeniowy: {n} mies.', { n }), { undo });
+              }}
+            >
+              {SETTLEMENT_OPTIONS.map((n) => (
+                <option key={n} value={n}>
+                  {n === 1 ? t('1 miesiąc') : n === 12 ? t('12 miesięcy (rok)') : t('{n} miesiące', { n })}
+                </option>
+              ))}
+            </select>
+          </label>
+          {period.length > 1 && (
+            <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} title={t('Pierwszy miesiąc okresu — od niego liczą się kolejne okresy')}>
+              {t('od')}
+              <input
+                type="month"
+                value={pattern.settlementStart ?? period[0]}
+                onChange={(e) =>
+                  e.target.value &&
+                  update((d) => void (d.patterns.find((x) => x.id === pattern.id)!.settlementStart = e.target.value), `Początek okresu rozliczeniowego ${pattern.name}: ${e.target.value}`)
+                }
+                style={{ width: 150 }}
+              />
+            </label>
+          )}
+          <span className="sub">
+            {period.length > 1
+              ? t('wymiar w okresie: {h} h · w tym miesiącu {m} h', { h: periodSummaries.reduce((x, p) => x + p.norm, 0), m: norm.hours })
+              : t('wymiar czasu pracy: {h} h ({d} dni roboczych × 8 h)', { h: norm.hours, d: norm.workdays })}
+          </span>
           <button type="button" className="btn small primary" title={t('Zaproponuj dodatkowe zmiany na innych liniach dla osób, którym brakuje godzin')} onClick={() => setFill(true)}>
             {t('Dopełnij godziny')}
           </button>
@@ -250,7 +298,11 @@ export default function Grafik() {
         <div className="row" style={{ alignItems: 'stretch' }}>
           {rows.map(({ b, cells }) => {
             const s = summary.find((x) => x.brigade === b)!;
-            const diff = s.hours - norm.hours;
+            const perMonth = periodSummaries.map((p) => ({ month: p.month, diff: (p.rows.find((x) => x.brigade === b)?.hours ?? 0) - p.norm }));
+            const periodHours = periodSummaries.reduce((x, p) => x + (p.rows.find((r) => r.brigade === b)?.hours ?? 0), 0);
+            const periodNorm = periodSummaries.reduce((x, p) => x + p.norm, 0);
+            const diff = period.length > 1 ? periodHours - periodNorm : s.hours - norm.hours;
+            const monthDiff = s.hours - norm.hours;
             const lost = (st: string) => cells.filter((c) => c.status === st).reduce((h, c) => h + (state.shiftDefs.find((d) => d.code === c.code)?.hours ?? 0), 0);
             const excluded = lost('excluded');
             const holidays = lost('holiday');
@@ -265,7 +317,25 @@ export default function Grafik() {
                 <div className="v" style={{ color: diff < 0 ? 'var(--red-ink)' : diff > 0 ? 'var(--amber-ink)' : 'var(--green-ink)' }}>
                   {diff === 0 ? '✓ 0 h' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)} h`}
                 </div>
+                {period.length > 1 && (
+                  <div className="d">
+                    {periodHours} h / {periodNorm} h {t('w okresie')}
+                    <div className="row" style={{ gap: 4, marginTop: 4 }}>
+                      {perMonth.map((m) => (
+                        <span
+                          key={m.month}
+                          className={`tag ${m.diff < 0 ? 'red' : m.diff > 0 ? 'amber' : 'green'}`}
+                          style={{ outline: m.month === month ? '2px solid currentColor' : undefined }}
+                          title={m.month}
+                        >
+                          {periodLabel([m.month]).split(' ')[0]} {m.diff === 0 ? '0' : `${m.diff > 0 ? '+' : '−'}${Math.abs(m.diff)}`}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 <div className="d">
+                  {period.length > 1 && <>{t('ten miesiąc')}: {monthDiff > 0 ? '+' : monthDiff < 0 ? '−' : ''}{Math.abs(monthDiff)} h · </>}
                   {s.hours} h / {norm.hours} h
                   {excluded > 0 && <> · {t('wyłączenia')} −{excluded} h</>}
                   {holidays > 0 && <> · {t('święta')} −{holidays} h</>}
