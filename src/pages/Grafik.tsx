@@ -10,6 +10,7 @@ import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent } from '../ui';
 import { monthNorm } from '../domain/norm';
 import HrExportSheet from './HrExport';
+import FillSheet from './FillSheet';
 import { t } from '../i18n';
 
 const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
@@ -44,6 +45,7 @@ export default function Grafik() {
   const summary = useMemo(() => (pattern ? summarize(state, pattern.id, month) : []), [state, pattern, month]);
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
   const [hr, setHr] = useState(false);
+  const [fill, setFill] = useState(false);
 
   if (!pattern) return <div className="card empty">{t('Brak zdefiniowanych wzorców zmian (Ustawienia).')}</div>;
   const codes = patternShiftCodes(pattern);
@@ -117,6 +119,13 @@ export default function Grafik() {
         </div>
       </div>
       {hr && <HrExportSheet month={month} onClose={() => setHr(false)} />}
+      {fill && (
+        <FillSheet
+          month={month}
+          workers={state.workers.filter((w) => w.active && w.patternId === pattern.id && (scope === 'all' || scopeLines.some((l) => l.id === w.lineId)))}
+          onClose={() => setFill(false)}
+        />
+      )}
 
       <section className="card">
         <div className="scroll-x">
@@ -225,6 +234,9 @@ export default function Grafik() {
         <div className="card-head">
           <h2>{t('Bilans godzin')} — {month}</h2>
           <span className="sub">{t('wymiar czasu pracy: {h} h ({d} dni roboczych × 8 h)', { h: norm.hours, d: norm.workdays })}</span>
+          <button type="button" className="btn small primary" title={t('Zaproponuj dodatkowe zmiany na innych liniach dla osób, którym brakuje godzin')} onClick={() => setFill(true)}>
+            {t('Dopełnij godziny')}
+          </button>
         </div>
         <div className="row" style={{ alignItems: 'stretch' }}>
           {rows.map(({ b, cells }) => {

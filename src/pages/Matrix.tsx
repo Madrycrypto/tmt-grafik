@@ -3,7 +3,7 @@ import { level } from '../domain/coverage';
 import { autoAssign } from '../domain/autoAssign';
 import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
-import { Level, LineSelect, TypeTag, useLine } from '../ui';
+import { Level, LineSelect, TypeTag, useLine, usePersistent } from '../ui';
 import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
 
@@ -14,17 +14,28 @@ export default function Matrix() {
   const [others, setOthers] = useState(false);
   const [query, setQuery] = useState('');
   const [open, setOpen] = useState<string | null>(null);
+  const [view, setView] = usePersistent<'line' | 'group' | 'plant'>('matrix-view', 'line');
 
-  const stations = useMemo(() => state.stations.filter((s) => s.lineId === lineId).sort((a, b) => a.order - b.order), [state, lineId]);
+  const line = state.lines.find((l) => l.id === lineId);
+  const viewLines = useMemo(() => {
+    const ls = view === 'plant' ? state.lines : view === 'group' && line?.group ? state.lines.filter((l) => l.group === line.group) : state.lines.filter((l) => l.id === lineId);
+    return [...ls].sort((a, b) => (a.group ?? '').localeCompare(b.group ?? '') || a.name.localeCompare(b.name));
+  }, [state, view, line, lineId]);
+  const lineStations = useMemo(() => state.stations.filter((s) => s.lineId === lineId).sort((a, b) => a.order - b.order), [state, lineId]);
+  const stations = useMemo(
+    () => viewLines.flatMap((l) => state.stations.filter((s) => s.lineId === l.id).sort((a, b) => a.order - b.order)),
+    [state, viewLines],
+  );
+  const wide = viewLines.length > 1;
   const people = useMemo(
     () =>
       state.workers
         .filter((w) => w.active)
-        .filter((w) => w.lineId === lineId || (others && stations.some((s) => level(w, s.id) > 0)))
+        .filter((w) => viewLines.some((l) => l.id === w.lineId) || (others && stations.some((s) => level(w, s.id) > 0)))
         .filter((w) => brigade === 'all' || w.brigade === brigade)
         .filter((w) => !query || w.name.toLowerCase().includes(query.toLowerCase()))
-        .sort((a, b) => a.brigade.localeCompare(b.brigade) || a.name.localeCompare(b.name)),
-    [state, lineId, others, stations, brigade, query],
+        .sort((a, b) => (wide ? (a.lineId ?? '').localeCompare(b.lineId ?? '') : 0) || a.brigade.localeCompare(b.brigade) || a.name.localeCompare(b.name)),
+    [state, viewLines, others, stations, brigade, query, wide],
   );
 
   const setLevel = (workerId: string, stationId: string) => {
@@ -46,8 +57,8 @@ export default function Matrix() {
 
   const lineWorkers = state.workers.filter((w) => w.active && w.lineId === lineId);
   const misplaced = lineWorkers.filter((w) => {
-    const home = stations.find((st) => st.id === w.homeStationId);
-    return home && level(w, home.id) < home.minLevel && stations.some((st) => level(w, st.id) >= st.minLevel);
+    const home = lineStations.find((st) => st.id === w.homeStationId);
+    return home && level(w, home.id) < home.minLevel && lineStations.some((st) => level(w, st.id) >= st.minLevel);
   });
 
   const fixHomes = () => {
@@ -55,14 +66,14 @@ export default function Matrix() {
     for (const b of BRIGADES) {
       const crew = lineWorkers.filter((w) => w.brigade === b);
       if (!crew.length) continue;
-      for (const p of autoAssign(crew, stations)) {
+      for (const p of autoAssign(crew, lineStations)) {
         const w = crew.find((x) => x.id === p.workerId)!;
         if (!misplaced.includes(w) || !p.stationId) continue;
         changes.push({ id: w.id, name: w.name, to: p.stationId });
       }
     }
     if (!changes.length) return;
-    const name = (id: string) => stations.find((st) => st.id === id)?.name ?? '?';
+    const name = (id: string) => lineStations.find((st) => st.id === id)?.name ?? '?';
     if (!confirm(t('Zmienić stanowisko macierzyste?') + '\n\n' + changes.map((c) => `${c.name} → ${name(c.to)}`).join('\n'))) return;
     update((d) => {
       for (const c of changes) d.workers.find((x) => x.id === c.id)!.homeStationId = c.to;
@@ -88,7 +99,15 @@ export default function Matrix() {
           <h1>{t('Matrix kompetencji')}</h1>
         </div>
         <div className="row">
-          <LineSelect state={state} value={lineId} onChange={setLineId} />
+          <label className="field">
+            {t('Zakres')}
+            <select value={view} onChange={(e) => setView(e.target.value as 'line' | 'group' | 'plant')}>
+              <option value="line">{t('jedna linia')}</option>
+              <option value="group" disabled={!line?.group}>{line?.group ? t('linia główna: {g}', { g: line.group }) : t('linia główna')}</option>
+              <option value="plant">{t('cały zakład')}</option>
+            </select>
+          </label>
+          {view !== 'plant' && <LineSelect state={state} value={lineId} onChange={setLineId} />}
           <label className="field">
             {t('Brygada')}
             <select value={brigade} onChange={(e) => setBrigade(e.target.value)}>
@@ -127,6 +146,20 @@ export default function Matrix() {
           <div className="scroll-x">
             <table style={{ minWidth: 200 + stations.length * 88 }}>
               <thead>
+                {wide && (
+                  <tr>
+                    <th className="sticky-col" />
+                    {viewLines.map((l) => {
+                      const n = stations.filter((s) => s.lineId === l.id).length;
+                      return n ? (
+                        <th key={l.id} colSpan={n} style={{ textAlign: 'center', borderLeft: '2px solid var(--line)', background: 'var(--accent-soft)' }}>
+                          {l.group ? `${l.group} · ` : ''}
+                          {l.name}
+                        </th>
+                      ) : null;
+                    })}
+                  </tr>
+                )}
                 <tr>
                   <th className="sticky-col">{t('Pracownik')}</th>
                   {stations.map((s) => (
@@ -145,7 +178,7 @@ export default function Matrix() {
                         {w.name}
                       </button>
                       <TypeTag w={w} /> <span className="sub">{t('bryg.')} {w.brigade} · {state.patterns.find((p) => p.id === w.patternId)?.name.match(/\d+ h/)?.[0]}</span>
-                      {w.lineId !== lineId && <span className="tag" style={{ marginLeft: 4 }}>{state.lines.find((l) => l.id === w.lineId)?.name}</span>}
+                      {(wide || w.lineId !== lineId) && <span className="tag" style={{ marginLeft: 4 }}>{state.lines.find((l) => l.id === w.lineId)?.name}</span>}
                     </td>
                     {stations.map((s) => (
                       <td key={s.id} style={{ textAlign: 'center', background: w.homeStationId === s.id ? 'var(--accent-soft)' : undefined }}>
