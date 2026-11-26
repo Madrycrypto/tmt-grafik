@@ -168,3 +168,63 @@ describe('3 zmiany lekkie (4 brygady, maks. 3 nocki)', () => {
     }
   });
 });
+
+describe('3 zmiany lekkie + sobota rano (4 brygady, maks. 3 nocki, pełny wymiar)', () => {
+  const { s, id } = withSystem('3LS', 8, 7);
+  const p = s.patterns.find((x) => x.id === id)!;
+  const days = [...monthDays('2026-12'), ...monthDays('2027-01'), ...monthDays('2027-02'), ...monthDays('2027-03')];
+  const def = (code: string) => s.shiftDefs.find((d) => d.code === code)!;
+  const work = (b: 'A', d: string) => {
+    const c = rotaCell(s, id, b, d);
+    return c.status === 'work' ? def(c.code) : null;
+  };
+
+  it('pn–pt obsadzone R, P i N; w sobotę jedna brygada rano; w niedzielę nikt', () => {
+    for (const d of days) {
+      if (holidayName(d)) continue;
+      const labels = patternBrigades(p).map((b) => work(b as 'A', d)?.label).filter(Boolean);
+      if (weekday(d) === 0) expect(labels).toEqual([]);
+      else if (weekday(d) === 6) expect(labels).toEqual(['R']);
+      else for (const l of ['R', 'P', 'N']) expect(labels, `${d} ${l}`).toContain(l);
+    }
+  });
+
+  it('maks. 3 nocki w tygodniu, ≥ 11 h odpoczynku dobowego, tygodniowy ≥ 35 h (≥ 24 h przy przejściu na inną zmianę)', () => {
+    const mon = days.indexOf('2026-12-07');
+    for (const b of patternBrigades(p)) {
+      const spans: [number, number][] = [];
+      days.forEach((d, i) => {
+        const w = work(b as 'A', d);
+        if (w) spans.push([i * 24 + w.start, i * 24 + w.start + w.hours]);
+      });
+      for (let k = 1; k < spans.length; k++) expect(spans[k][0] - spans[k - 1][1], `${b}`).toBeGreaterThanOrEqual(11);
+      for (let wk = mon; wk + 7 <= days.length; wk += 7) {
+        const nights = days.slice(wk, wk + 7).filter((d) => work(b as 'A', d)?.label === 'N').length;
+        expect(nights).toBeLessThanOrEqual(3);
+        // najdłuższa przerwa w obrębie tygodnia pn 0:00 – nd 24:00
+        const from = wk * 24;
+        const to = from + 168;
+        const inWeek = spans.filter(([a, e]) => e > from && a < to).map(([a, e]) => [Math.max(a, from), Math.min(e, to)]);
+        let longest = 0;
+        let cur = from;
+        for (const [a, e] of inWeek) {
+          longest = Math.max(longest, a - cur);
+          cur = Math.max(cur, e);
+        }
+        longest = Math.max(longest, to - cur);
+        // KP art. 133 § 2: przy przejściu na inną zmianę (tu: z nocek na ranki) odpoczynek tygodniowy ≥ 24 h, inaczej ≥ 35 h
+        const labels = days.slice(wk, wk + 7).map((d) => work(b as 'A', d)?.label).filter(Boolean);
+        const changes = labels.includes('N') && labels.includes('R');
+        expect(longest, `${b} tydzień ${days[wk]}`).toBeGreaterThanOrEqual(changes ? 24 : 35);
+      }
+    }
+  });
+
+  it('pełny wymiar: 160 h na 4 tygodnie bez świąt', () => {
+    const feb = days.indexOf('2027-02-01');
+    for (const b of patternBrigades(p)) {
+      const hours = days.slice(feb, feb + 28).reduce((h, d) => h + (work(b as 'A', d)?.hours ?? 0), 0);
+      expect(hours).toBe(160);
+    }
+  });
+});
