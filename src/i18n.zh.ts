@@ -822,4 +822,5 @@ export const zh: Record<string, string> = {
   'Dodano mimo uwag: {w}': '已添加（注意：{w}）',
   'Dodano zmianę {d} na {l}': '已添加 {d} 在 {l} 的班次',
   'Brakuje godzin do wymiaru w tym miesiącu — otwórz kartę, aby dodać zmianę na innej linii': '本月工时不足——打开员工卡添加其他产线的班次',
+  'Wolne dni, gdy ta linia pracuje:': '休息日中该产线工作的日子：',
 };

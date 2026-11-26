@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useApp } from '../data/AppContext';
 import { setAssignment, stationName } from '../domain/actions';
 import { level, plannedShift, absenceOn } from '../domain/coverage';
@@ -42,6 +42,20 @@ export default function WorkerHours({ worker }: { worker: Worker }) {
     .sort((a, b) => level(worker, b.id) - level(worker, a.id) || a.order - b.order);
   const [stationId, setStationId] = useState('');
   const station = stations.find((s) => s.id === stationId) ?? stations.find((s) => level(worker, s.id) >= s.minLevel) ?? stations[0];
+  // najbliższe dni, gdy pracownik ma wolne, a wybrana linia pracuje — do kliknięcia
+  const freeDays = useMemo(() => {
+    const out: string[] = [];
+    for (let i = 1; i <= 35 && out.length < 8; i++) {
+      const d = addDays(today, i);
+      if (plannedShift(state, worker, d) || absenceOn(state, worker.id, d)) continue;
+      if (lineWindows(state, lineId, d).length) out.push(d);
+    }
+    return out;
+  }, [state, worker, lineId, today]);
+  // dzień, w który linia nie pracuje, zamień na najbliższy pasujący
+  useEffect(() => {
+    if (!lineWindows(state, lineId, date).length && freeDays[0]) setDate(freeDays[0]);
+  }, [lineId, freeDays]); // eslint-disable-line react-hooks/exhaustive-deps
   const busy = plannedShift(state, worker, date);
   const absent = absenceOn(state, worker.id, date);
   const rest = win ? restCheck(state, worker, date, { start: win.start, end: win.start + win.hours }) : null;
@@ -103,6 +117,16 @@ export default function WorkerHours({ worker }: { worker: Worker }) {
           </select>
         </label>
       </div>
+      {freeDays.length > 0 && (
+        <div className="row" style={{ gap: 6, alignItems: 'center' }}>
+          <span className="sub">{t('Wolne dni, gdy ta linia pracuje:')}</span>
+          {freeDays.map((d) => (
+            <button key={d} type="button" className={`btn small ${d === date ? 'primary' : ''}`} onClick={() => setDate(d)}>
+              {fmtDate(d)}
+            </button>
+          ))}
+        </div>
+      )}
       {windows.length === 0 ? (
         <div className="sub">{t('Tego dnia linia nie pracuje.')}</div>
       ) : (
@@ -130,7 +154,7 @@ export default function WorkerHours({ worker }: { worker: Worker }) {
           </label>
         </div>
       )}
-      {(busy || absent || (rest && !rest.ok) || (station && lv < station.minLevel)) && (
+      {win && (busy || absent || (rest && !rest.ok) || (station && lv < station.minLevel)) && (
         <div className="note amber">
           {busy && <div>{t('Tego dnia ma już zmianę {r} — to będzie druga zmiana.', { r: fmtRange(busy.start, busy.end - busy.start) })}</div>}
           {absent && <div>{t('Tego dnia ma nieobecność.')}</div>}
