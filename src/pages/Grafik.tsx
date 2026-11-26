@@ -1,10 +1,11 @@
+import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
 import { WEEKDAY_LONG, WEEKDAY_SHORT, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
 import { baseCode, brigadeMonth, gapsOnDay, patternShiftCodes, summarize } from '../domain/rota';
 import type { RotaCell } from '../domain/rota';
 import { OFF, holidaysOff, patternBrigades } from '../domain/types';
-import type { BrigadeId, Exclusion } from '../domain/types';
+import type { BrigadeId, Exclusion, Pattern } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent } from '../ui';
@@ -308,14 +309,15 @@ export default function Grafik() {
             </div>
           )}
         </section>
-        <Exclusions />
+        <Exclusions pattern={pattern} />
       </div>
     </>
   );
 }
 
-function Exclusions() {
-  const { state, update } = useApp();
+function Exclusions({ pattern }: { pattern: Pattern }) {
+  const { state, update, undo } = useApp();
+  const used = new Set(patternShiftCodes(pattern));
   const [kind, setKind] = useState<'weekly' | 'date'>('weekly');
   const [wd, setWd] = useState(0);
   const [date, setDate] = useState(todayIso());
@@ -330,12 +332,30 @@ function Exclusions() {
       })
       .join(', ')}`;
 
+  const sameDay = (e: Exclusion) => e.kind === kind && (kind === 'weekly' ? e.weekday === wd : e.date === date);
+
   const add = () => {
     if (!codes.length) return;
-    const ex: Exclusion = { id: uid('ex'), kind, shiftCodes: codes, note: note || undefined, ...(kind === 'weekly' ? { weekday: wd } : { date }) };
+    const existing = state.exclusions.find(sameDay);
+    const fresh = codes.filter((c) => !existing?.shiftCodes.includes(c));
+    if (!fresh.length) {
+      toast(t('Takie wyłączenie już jest.'), { tone: 'warn' });
+      return;
+    }
+    const ex: Exclusion = existing
+      ? { ...existing, shiftCodes: [...existing.shiftCodes, ...fresh], note: note || existing.note }
+      : { id: uid('ex'), kind, shiftCodes: codes, note: note || undefined, ...(kind === 'weekly' ? { weekday: wd } : { date }) };
     update((d) => {
-      d.exclusions.push(ex);
-    }, `Dodano wyłączenie: ${describe(ex)}`);
+      // ten sam dzień = jeden wpis; nowe zmiany dopisujemy do istniejącego
+      d.exclusions = existing ? d.exclusions.map((x) => (x.id === existing.id ? ex : x)) : [...d.exclusions, ex];
+    }, `${existing ? 'Rozszerzono' : 'Dodano'} wyłączenie: ${describe(ex)}`);
+    const hits = fresh.filter((c) => used.has(c));
+    toast(
+      hits.length
+        ? t('Dodano wyłączenie — bilans godzin uwzględnia je od razu.')
+        : t('Dodano, ale ten system ({p}) nie ma takiej zmiany — jego bilans się nie zmieni.', { p: pattern.name }),
+      { undo, tone: hits.length ? 'ok' : 'warn' },
+    );
     setCodes([]);
     setNote('');
   };
@@ -355,11 +375,12 @@ function Exclusions() {
           <button
             type="button"
             className="btn small"
-            onClick={() =>
+            onClick={() => {
               update((d) => {
                 d.exclusions = d.exclusions.filter((x) => x.id !== e.id);
-              }, `Usunięto wyłączenie: ${describe(e)}`)
-            }
+              }, `Usunięto wyłączenie: ${describe(e)}`);
+              toast(t('Usunięto wyłączenie'), { undo });
+            }}
           >
             {t('Usuń')}
           </button>
@@ -392,15 +413,22 @@ function Exclusions() {
             </label>
           )}
         </div>
+        <div className="sub">{t('Zmiany systemu „{p}” są wyróżnione; wyszarzone należą do innych systemów.', { p: pattern.name })}</div>
         <div className="row" role="group" aria-label={t('Zmiany do wyłączenia')}>
-          {state.shiftDefs.map((s) => (
-            <label key={s.code} className="tag" style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '6px 10px', fontSize: 12 }}>
+          {[...state.shiftDefs].sort((a, b) => Number(used.has(b.code)) - Number(used.has(a.code))).map((s) => (
+            <label
+              key={s.code}
+              className={`tag ${used.has(s.code) ? 'blue' : ''}`}
+              title={used.has(s.code) ? undefined : t('Ta zmiana nie występuje w wybranym systemie')}
+              style={{ display: 'inline-flex', gap: 6, alignItems: 'center', padding: '6px 10px', fontSize: 12, opacity: used.has(s.code) ? 1 : 0.55 }}
+            >
               <input
                 type="checkbox"
                 checked={codes.includes(s.code)}
                 onChange={(e) => setCodes(e.target.checked ? [...codes, s.code] : codes.filter((c) => c !== s.code))}
               />
               {t(s.label)} {fmtRange(s.start, s.hours)}
+              {!used.has(s.code) && <span style={{ fontWeight: 400 }}>· {t('inny system')}</span>}
             </label>
           ))}
         </div>

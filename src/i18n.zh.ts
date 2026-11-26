@@ -782,4 +782,11 @@ export const zh: Record<string, string> = {
   'Wyjście prywatne? Dotknij tutaj, potem przyłóż kartę': '私事外出？先点这里，再出示工卡',
   'Bez karty?': '没有工卡？',
   'Zeskanuj ten kod telefonem.': '用手机扫描此码。',
+  'Takie wyłączenie już jest.': '该停产设置已存在。',
+  'Dodano wyłączenie — bilans godzin uwzględnia je od razu.': '已添加停产——工时平衡立即更新。',
+  'Dodano, ale ten system ({p}) nie ma takiej zmiany — jego bilans się nie zmieni.': '已添加，但该班制（{p}）没有这个班次——其工时平衡不变。',
+  'Usunięto wyłączenie': '已删除停产',
+  'Zmiany systemu „{p}” są wyróżnione; wyszarzone należą do innych systemów.': '「{p}」的班次已高亮；灰色的属于其他班制。',
+  'Ta zmiana nie występuje w wybranym systemie': '所选班制中没有此班次',
+  'inny system': '其他班制',
 };

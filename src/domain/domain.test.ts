@@ -185,3 +185,17 @@ describe('dane demo', () => {
     expect(variants.length).toBeGreaterThan(0);
   });
 });
+
+describe('wyłączenia a bilans godzin', () => {
+  it('nowe wyłączenie od razu zmienia godziny brygady w nowym stanie (bez starej pamięci podręcznej)', async () => {
+    const { emptyState } = await import('./seed');
+    const { summarize } = await import('./rota');
+    const s1 = emptyState();
+    s1.exclusions = [];
+    const before = summarize(s1, 'p8', '2026-11');
+    const night = s1.patterns.find((p) => p.id === 'p8')!.sequence.find((c) => s1.shiftDefs.find((d) => d.code === c)?.label === 'N')!;
+    const s2 = { ...s1, exclusions: [{ id: 'x', kind: 'weekly' as const, weekday: 0, shiftCodes: [night] }] };
+    const after = summarize(s2, 'p8', '2026-11');
+    expect(after.reduce((h, b) => h + b.hours, 0)).toBeLessThan(before.reduce((h, b) => h + b.hours, 0));
+  });
+});
