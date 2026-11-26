@@ -96,7 +96,7 @@ export default function Matrix() {
       )}
       <div className="page-head">
         <div>
-          <div className="sub">{t('Kliknij poziom, aby go zmienić (0 → 1 → 2 → 3 → 4)')}</div>
+          <div className="sub">{t('Kliknij kółko i wybierz poziom z listy')}</div>
           <h1>{t('Matrix kompetencji')}</h1>
         </div>
         <div className="row">

@@ -240,7 +240,7 @@ export const zh: Record<string, string> = {
   'Niedziela — nie pracujemy w nocy': '周日夜班停产',
 
   // matrix
-  'Kliknij poziom, aby go zmienić (0 → 1 → 2 → 3 → 4)': '点击等级进行修改（0 → 1 → 2 → 3 → 4）',
+  'Kliknij kółko i wybierz poziom z listy': '点击圆圈并从列表中选择等级',
   'pokaż osoby z innych linii z kwalifikacjami': '显示其他产线具备资质的人员',
   'Ta linia nie ma stanowisk.': '该产线没有工位。',
   'Osoby z poz. ≥ min': '达到最低等级的人数',
