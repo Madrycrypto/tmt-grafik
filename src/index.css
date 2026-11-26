@@ -255,3 +255,7 @@ button.cell { cursor: pointer; }
 .kiosk-private-btn { width: 100%; min-height: 56px; font-size: 17px; font-weight: 700; background: #3a3420; color: #f2b705; border: 2px solid #f2b705; }
 .kiosk-private-btn.armed { background: #f2b705; color: #2b2100; }
 .kiosk .qr-box { width: min(48vh, 100%); }
+
+/* strefa upuszczania pliku */
+.drop { display: flex; flex-direction: column; align-items: center; gap: 4px; padding: 28px 16px; border: 2px dashed var(--line, #cfd6e4); border-radius: 12px; cursor: pointer; text-align: center; margin-bottom: 12px; }
+.drop.over, .drop:hover { border-color: var(--accent, #2f55d4); background: var(--accent-soft); }

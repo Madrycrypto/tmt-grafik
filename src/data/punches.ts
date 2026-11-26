@@ -77,3 +77,16 @@ export async function deletePunch(client: ReturnType<typeof useApp>['backend']['
   const { error } = await client.from('records').delete().eq('kind', 'punches').eq('id', id);
   if (error) throw error;
 }
+
+/** Zapis wielu odbić naraz (import z pliku); te same identyfikatory nadpisują się, nie dublują. */
+export async function savePunches(client: ReturnType<typeof useApp>['backend']['client'], list: Punch[]): Promise<void> {
+  if (!client) {
+    const ids = new Set(list.map((p) => p.id));
+    localStorage.setItem(DEMO_KEY, JSON.stringify([...demoAll().filter((x) => !ids.has(x.id)), ...list]));
+    return;
+  }
+  for (let i = 0; i < list.length; i += 500) {
+    const { error } = await client.from('records').upsert(list.slice(i, i + 500).map((p) => ({ kind: 'punches', id: p.id, data: p })));
+    if (error) throw error;
+  }
+}

@@ -6,6 +6,7 @@ import { checkDay, DIR_LABEL, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } f
 import type { DayCheck, Punch } from '../domain/punches';
 import { LineOptions, TypeTag } from '../ui';
 import { WorkerEditor } from './Pracownicy';
+import TnaImport from './TnaImport';
 import { t } from '../i18n';
 
 const PROBLEM = new Set(['late', 'early', 'late_early', 'no_in', 'no_out', 'missing', 'unplanned']);
@@ -56,6 +57,7 @@ export default function Rcp() {
   const [lineId, setLineId] = useState('all');
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [openWorker, setOpenWorker] = useState<string | null>(null);
+  const [tna, setTna] = useState(false);
   const { punches, error, reload } = usePunches(addDays(date, -1), addDays(date, 1));
 
   const nowH = date === todayIso() ? new Date().getHours() + new Date().getMinutes() / 60 : date > todayIso() ? -99 : 99;
@@ -145,6 +147,11 @@ export default function Rcp() {
               <button type="button" className="btn small" aria-label={t('Następny dzień')} onClick={() => setDate(addDays(date, 1))}>›</button>
             </div>
           </label>
+          {canEdit && (
+            <button type="button" className="btn" title={t('Wgraj plik z odbiciami z czytnika Comarch TNA')} onClick={() => setTna(true)}>
+              {t('Import z TNA')}
+            </button>
+          )}
           <a className="btn" href="#/kiosk" target="_blank" rel="noreferrer">{t('Otwórz kiosk')}</a>
         </div>
       </div>
@@ -228,7 +235,7 @@ export default function Rcp() {
                   <td>
                     <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                       {r.punches.map((p) => (
-                        <span key={p.id} className={`tag ${p.dir === 'private_out' ? 'amber' : ''}`} title={`${t(DIR_LABEL[p.ret ? 'return' : p.dir])} · ${p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : p.source === 'badge' ? t('karta RCP') : `${t('kiosk')}: ${p.kiosk ?? ''}`}`}>
+                        <span key={p.id} className={`tag ${p.dir === 'private_out' ? 'amber' : ''}`} title={`${t(DIR_LABEL[p.ret ? 'return' : p.dir])} · ${p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : p.source === 'badge' ? t('karta RCP') : p.source === 'tna' ? t('czytnik Comarch TNA') : `${t('kiosk')}: ${p.kiosk ?? ''}`}`}>
                           {p.dir === 'private_out' ? '↗' : p.dir === 'in' ? (p.ret ? '↩' : '→') : '←'} {fmtMin(p.min)}{p.date !== date ? ` (${fmtDate(p.date)})` : ''}{p.source === 'manual' ? ' ✎' : p.source === 'plan' ? ' ✓' : ''}
                           {canEdit && (
                             <button type="button" className="btn small ghost" style={{ padding: '0 4px' }} aria-label={t('Usuń odbicie')} onClick={() => void remove(r, p)}>×</button>
@@ -252,6 +259,7 @@ export default function Rcp() {
           {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie, ✓ = zatwierdzone wg grafiku, ↗ = wyjście prywatne, ↩ = powrót.')}
         </div>
       </section>
+      {tna && <TnaImport onClose={() => setTna(false)} onDone={() => void reload()} />}
       {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}
     </>
   );
