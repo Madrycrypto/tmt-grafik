@@ -10,7 +10,7 @@ import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent } from '../ui';
 import { monthNorm } from '../domain/norm';
-import { patternPeriod, periodLabel, SETTLEMENT_OPTIONS } from '../domain/settlement';
+import { patternPeriod, periodLabel, periodMonths, SETTLEMENT_OPTIONS } from '../domain/settlement';
 import HrExportSheet from './HrExport';
 import FillSheet from './FillSheet';
 import { t } from '../i18n';
@@ -56,9 +56,14 @@ export default function Grafik() {
   const target = state.targets.find((t) => t.patternId === pattern?.id && t.month === month);
   // okres rozliczeniowy systemu: bilans liczony za wszystkie jego miesiące
   const period = patternPeriod(pattern, month);
+  // podgląd dla kierownika: dłuższy horyzont (6/12 mies.) bez zmiany oficjalnego okresu
+  const [view, setView] = usePersistent('bilans-widok', 'okres');
+  const viewN = view === 'okres' ? 0 : Number(view);
+  const span = viewN > period.length ? periodMonths(month, viewN, pattern?.settlementStart) : period;
+  const preview = span !== period;
   const periodSummaries = useMemo(
-    () => (pattern ? period.map((m) => ({ month: m, norm: monthNorm(m).hours, rows: summarize(state, pattern.id, m) })) : []),
-    [state, pattern, period.join()], // eslint-disable-line react-hooks/exhaustive-deps
+    () => (pattern ? span.map((m) => ({ month: m, norm: monthNorm(m).hours, rows: summarize(state, pattern.id, m) })) : []),
+    [state, pattern, span.join()], // eslint-disable-line react-hooks/exhaustive-deps
   );
   const [hr, setHr] = useState(false);
   const [fill, setFill] = useState(false);
@@ -249,7 +254,7 @@ export default function Grafik() {
       <section className="card">
         <div className="card-head">
           <h2>
-            {t('Bilans godzin')} — {period.length > 1 ? periodLabel(period) : month}
+            {t('Bilans godzin')} — {span.length > 1 ? periodLabel(span) : month}
           </h2>
           <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
             {t('Okres rozliczeniowy')}
@@ -286,9 +291,17 @@ export default function Grafik() {
               />
             </label>
           )}
+          <label className="field" style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }} title={t('Tylko podgląd dla planowania — rozliczenie w kadrach zostaje według okresu rozliczeniowego')}>
+            {t('Podgląd')}
+            <select value={view} onChange={(e) => setView(e.target.value)}>
+              <option value="okres">{t('okres rozliczeniowy')}</option>
+              <option value="6">{t('6 miesięcy')}</option>
+              <option value="12">{t('12 miesięcy')}</option>
+            </select>
+          </label>
           <span className="sub">
-            {period.length > 1
-              ? t('wymiar w okresie: {h} h · w tym miesiącu {m} h', { h: periodSummaries.reduce((x, p) => x + p.norm, 0), m: norm.hours })
+            {span.length > 1
+              ? t(preview ? 'wymiar w podglądzie: {h} h · w tym miesiącu {m} h' : 'wymiar w okresie: {h} h · w tym miesiącu {m} h', { h: periodSummaries.reduce((x, p) => x + p.norm, 0), m: norm.hours })
               : t('wymiar czasu pracy: {h} h ({d} dni roboczych × 8 h)', { h: norm.hours, d: norm.workdays })}
           </span>
           <button type="button" className="btn small primary" title={t('Zaproponuj dodatkowe zmiany na innych liniach dla osób, którym brakuje godzin')} onClick={() => setFill(true)}>
@@ -301,7 +314,15 @@ export default function Grafik() {
             const perMonth = periodSummaries.map((p) => ({ month: p.month, diff: (p.rows.find((x) => x.brigade === b)?.hours ?? 0) - p.norm }));
             const periodHours = periodSummaries.reduce((x, p) => x + (p.rows.find((r) => r.brigade === b)?.hours ?? 0), 0);
             const periodNorm = periodSummaries.reduce((x, p) => x + p.norm, 0);
-            const diff = period.length > 1 ? periodHours - periodNorm : s.hours - norm.hours;
+            const diff = span.length > 1 ? periodHours - periodNorm : s.hours - norm.hours;
+            // w podglądzie dłuższym niż okres: bilans każdego oficjalnego okresu osobno
+            const chips = preview
+              ? [...new Set(span.map((m) => patternPeriod(pattern, m).join()))].map((key) => {
+                  const ms = key.split(',');
+                  const d = perMonth.filter((x) => ms.includes(x.month)).reduce((h, x) => h + x.diff, 0);
+                  return { key, label: periodLabel(ms).replace(/ \d{4}/g, ''), diff: d, current: ms.includes(month), title: periodLabel(ms) };
+                })
+              : perMonth.map((m) => ({ key: m.month, label: periodLabel([m.month]).split(' ')[0], diff: m.diff, current: m.month === month, title: m.month }));
             const monthDiff = s.hours - norm.hours;
             const lost = (st: string) => cells.filter((c) => c.status === st).reduce((h, c) => h + (state.shiftDefs.find((d) => d.code === c.code)?.hours ?? 0), 0);
             const excluded = lost('excluded');
@@ -317,25 +338,26 @@ export default function Grafik() {
                 <div className="v" style={{ color: diff < 0 ? 'var(--red-ink)' : diff > 0 ? 'var(--amber-ink)' : 'var(--green-ink)' }}>
                   {diff === 0 ? '✓ 0 h' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)} h`}
                 </div>
-                {period.length > 1 && (
+                {span.length > 1 && (
                   <div className="d">
-                    {periodHours} h / {periodNorm} h {t('w okresie')}
+                    {periodHours} h / {periodNorm} h {preview ? t('w podglądzie') : t('w okresie')}
+                    {preview && <div>{t('okresy rozliczeniowe:')}</div>}
                     <div className="row" style={{ gap: 4, marginTop: 4 }}>
-                      {perMonth.map((m) => (
+                      {chips.map((c) => (
                         <span
-                          key={m.month}
-                          className={`tag ${m.diff < 0 ? 'red' : m.diff > 0 ? 'amber' : 'green'}`}
-                          style={{ outline: m.month === month ? '2px solid currentColor' : undefined }}
-                          title={m.month}
+                          key={c.key}
+                          className={`tag ${c.diff < 0 ? 'red' : c.diff > 0 ? 'amber' : 'green'}`}
+                          style={{ outline: c.current ? '2px solid currentColor' : undefined }}
+                          title={c.title}
                         >
-                          {periodLabel([m.month]).split(' ')[0]} {m.diff === 0 ? '0' : `${m.diff > 0 ? '+' : '−'}${Math.abs(m.diff)}`}
+                          {c.label} {c.diff === 0 ? '0' : `${c.diff > 0 ? '+' : '−'}${Math.abs(c.diff)}`}
                         </span>
                       ))}
                     </div>
                   </div>
                 )}
                 <div className="d">
-                  {period.length > 1 && <>{t('ten miesiąc')}: {monthDiff > 0 ? '+' : monthDiff < 0 ? '−' : ''}{Math.abs(monthDiff)} h · </>}
+                  {span.length > 1 && <>{t('ten miesiąc')}: {monthDiff > 0 ? '+' : monthDiff < 0 ? '−' : ''}{Math.abs(monthDiff)} h · </>}
                   {s.hours} h / {norm.hours} h
                   {excluded > 0 && <> · {t('wyłączenia')} −{excluded} h</>}
                   {holidays > 0 && <> · {t('święta')} −{holidays} h</>}

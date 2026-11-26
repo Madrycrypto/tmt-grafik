@@ -872,4 +872,12 @@ export const zh: Record<string, string> = {
   'Godziny w okresie rozliczeniowym {p}': '结算周期 {p} 的工时',
   'Brakuje godzin do wymiaru w okresie rozliczeniowym — otwórz kartę, aby dodać zmianę na innej linii': '结算周期内工时不足——打开员工卡添加其他产线的班次',
   'Nikomu z tej grupy nie brakuje godzin w okresie rozliczeniowym.': '该组在结算周期内无人工时不足。',
+  'Podgląd': '预览',
+  'okres rozliczeniowy': '结算周期',
+  '6 miesięcy': '6个月',
+  '12 miesięcy': '12个月',
+  'w podglądzie': '预览内',
+  'okresy rozliczeniowe:': '各结算周期：',
+  'wymiar w podglądzie: {h} h · w tym miesiącu {m} h': '预览内标准工时：{h} 小时 · 本月 {m} 小时',
+  'Tylko podgląd dla planowania — rozliczenie w kadrach zostaje według okresu rozliczeniowego': '仅用于计划的预览——人事结算仍按结算周期',
 };
