@@ -145,22 +145,9 @@ export default function Kiosk() {
         </span>
       </header>
       <main>
-        <section className="kiosk-qr">
-          <h1>{t('Zeskanuj telefonem')}</h1>
-          <p>{t('Wejście albo wyjście zapisze się samo.')}</p>
-          <div className="qr-box" aria-label={t('Kod QR do odbicia')} dangerouslySetInnerHTML={{ __html: token ? svgOf(punchUrl(token)) : '' }} />
-          <div className="kiosk-private-qr">
-            <div className="qr-mini" dangerouslySetInnerHTML={{ __html: token ? svgOf(punchUrl(token, true), 4) : '' }} />
-            <div>
-              <b>{t('Wyjście prywatne')}</b>
-              <div className="sub">{t('Zeskanuj ten mały kod. Powrót — zwykłym kodem.')}</div>
-            </div>
-          </div>
-          {error ? <div className="note red">{error}</div> : <div className="sub">{t('Kod zmienia się co {s} s — zdjęcie kodu nie zadziała później.', { s: QR_EVERY })}</div>}
-        </section>
-        <section className="kiosk-list">
+        <section className="kiosk-cam">
           <div className="kiosk-cam-head">
-            <h2>{t('Karta lub kod z telefonu')}</h2>
+            <h1>{priv ? t('Wyjście prywatne — przyłóż kartę') : t('Przyłóż kartę RCP')}</h1>
             <span style={{ display: 'inline-flex', gap: 6 }}>
               {camOn && (
                 <button type="button" className="btn small ghost" style={{ color: '#9eabc2' }} title={t('Przełącz kamerę')} onClick={() => setFacing(facing === 'user' ? 'environment' : 'user')}>
@@ -172,23 +159,40 @@ export default function Kiosk() {
               </button>
             </span>
           </div>
-          {camOn && (
-            <>
+          <p className="kiosk-hint">{t('albo telefon z otwartą aplikacją TMT — wejście lub wyjście zapisze się samo')}</p>
+          {camOn ? (
+            <div className={`kiosk-cam-box ${priv ? 'armed' : ''}`}>
               <QrScan key={facing} facing={facing} paused={!!result} onCode={(c) => void onCode(c)} />
-              <button type="button" className={`btn kiosk-private-btn ${priv ? 'armed' : ''}`} onClick={() => setPrivUntil(priv ? 0 : Date.now() + PRIVATE_ARM_MS)}>
-                {priv ? t('Wyjście prywatne — pokaż kartę ({s} s)', { s: Math.ceil((privUntil - now.getTime()) / 1000) }) : t('Wyjście prywatne? Dotknij, potem pokaż kartę')}
-              </button>
-            </>
-          )}
-          <h2>{t('Ostatnie odbicia')}</h2>
-          {recent.length === 0 && <div className="sub">{t('Jeszcze nikt się nie odbił.')}</div>}
-          {recent.map((r) => (
-            <div key={r.id} className="kiosk-row">
-              <span className={`tag ${tone(r)}`}>{t(DIR_LABEL[r.ret ? 'return' : r.dir])}</span>
-              <span className="grow">{r.name}</span>
-              <b>{hhmm(r.at)}</b>
             </div>
-          ))}
+          ) : (
+            <div className="note">{t('Kamera wyłączona — odbicia tylko telefonem (kod obok).')}</div>
+          )}
+          <button type="button" className={`kiosk-private-btn ${priv ? 'armed' : ''}`} onClick={() => setPrivUntil(priv ? 0 : Date.now() + PRIVATE_ARM_MS)}>
+            {priv
+              ? t('Wyjście prywatne — przyłóż kartę ({s} s) · dotknij, aby anulować', { s: Math.ceil((privUntil - now.getTime()) / 1000) })
+              : t('Wyjście prywatne? Dotknij tutaj, potem przyłóż kartę')}
+          </button>
+        </section>
+        <section className="kiosk-side">
+          <div className="kiosk-phone">
+            <div className="qr-mini" aria-label={t('Kod QR do odbicia')} dangerouslySetInnerHTML={{ __html: token ? svgOf(punchUrl(token), 5) : '' }} />
+            <div>
+              <b>{t('Bez karty?')}</b>
+              <div className="sub">{t('Zeskanuj ten kod telefonem.')}</div>
+              {error && <div className="note red" style={{ marginTop: 6 }}>{error}</div>}
+            </div>
+          </div>
+          <div className="kiosk-list">
+            <h2>{t('Ostatnie odbicia')}</h2>
+            {recent.length === 0 && <div className="sub">{t('Jeszcze nikt się nie odbił.')}</div>}
+            {recent.map((r) => (
+              <div key={r.id} className="kiosk-row">
+                <span className={`tag ${tone(r)}`}>{t(DIR_LABEL[r.ret ? 'return' : r.dir])}</span>
+                <span className="grow">{r.name}</span>
+                <b>{hhmm(r.at)}</b>
+              </div>
+            ))}
+          </div>
         </section>
       </main>
       <footer className="sub">{t('Kiosk')}: {name} · {user}</footer>

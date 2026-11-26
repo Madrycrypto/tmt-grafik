@@ -336,3 +336,22 @@ button.cell { cursor: pointer; }
 .switch:checked::after { transform: translateX(20px); }
 .switch:disabled { opacity: 0.45; cursor: not-allowed; }
 .switch:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* kiosk v3: kamera na kartę jako główny element */
+.kiosk main { grid-template-columns: minmax(0, 1.6fr) minmax(260px, 1fr); }
+.kiosk-cam { background: #222c3d; border-radius: 20px; padding: 18px; display: flex; flex-direction: column; gap: 12px; }
+.kiosk-cam h1 { font-size: clamp(24px, 3.2vw, 38px); margin: 0; }
+.kiosk-hint { margin: 0; color: #9eabc2; font-size: 16px; }
+.kiosk-cam-box { border: 4px solid #3a4660; border-radius: 18px; overflow: hidden; }
+.kiosk-cam-box.armed { border-color: #f2b705; box-shadow: 0 0 0 4px rgba(242, 183, 5, 0.25); }
+.kiosk-cam-box .qr-scan video { max-height: 58vh; }
+.kiosk-private-btn { min-height: 76px; font-size: 20px; border-radius: 14px; cursor: pointer; }
+.kiosk-side { display: flex; flex-direction: column; gap: 14px; }
+.kiosk-phone { display: flex; gap: 14px; align-items: center; background: #fff; color: #16181d; border-radius: 16px; padding: 12px; }
+.kiosk-phone .qr-mini { width: 150px; height: 150px; flex: 0 0 150px; }
+@media (max-width: 800px) { .kiosk main { grid-template-columns: 1fr; } }
+
+/* aplikacja pracownika: kod na start */
+.my-qr { display: flex; gap: 16px; align-items: center; cursor: pointer; }
+.my-qr-box { width: 46%; max-width: 230px; flex: 0 0 auto; background: #fff; border-radius: 12px; padding: 6px; }
+@media (max-width: 420px) { .my-qr { flex-direction: column; text-align: center; } .my-qr-box { width: 72%; } }

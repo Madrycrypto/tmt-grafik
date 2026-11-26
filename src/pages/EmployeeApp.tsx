@@ -112,8 +112,8 @@ function PushCard() {
   );
 }
 
-/** Krótkotrwały kod pracownika do pokazania kamerze tabletu (odświeża się co 20 s). */
-function MyQr({ onClose }: { onClose: () => void }) {
+/** Krótkotrwały kod pracownika dla kamery tabletu; odświeża się co 20 s, więc zrzut ekranu nie zadziała. */
+function useMyQr(): { svg: string; err: string | null } {
   const { backend } = useApp();
   const [svg, setSvg] = useState('');
   const [err, setErr] = useState<string | null>(null);
@@ -133,21 +133,41 @@ function MyQr({ onClose }: { onClose: () => void }) {
     };
     void load();
     const id = window.setInterval(() => void load(), 20_000);
+    const vis = () => document.visibilityState === 'visible' && void load();
+    document.addEventListener('visibilitychange', vis);
     return () => {
       stop = true;
       window.clearInterval(id);
+      document.removeEventListener('visibilitychange', vis);
     };
   }, [backend]);
-  return (
-    <div className="scan-overlay" onClick={onClose}>
-      <div className="scan-top">
-        <b>{t('Pokaż ten kod kamerze tabletu')}</b>
-        <button type="button" className="btn small">{t('Zamknij')}</button>
+  return { svg, err };
+}
+
+/** Pierwsze, co widzi pracownik: jego kod do przyłożenia do tabletu. Dotknięcie powiększa. */
+function MyQrCard() {
+  const { svg, err } = useMyQr();
+  const [big, setBig] = useState(false);
+  if (big)
+    return (
+      <div className="scan-overlay" onClick={() => setBig(false)}>
+        <div className="scan-top">
+          <b>{t('Pokaż ten kod kamerze tabletu')}</b>
+          <button type="button" className="btn small">{t('Zamknij')}</button>
+        </div>
+        <div className="qr-box" style={{ background: '#fff', borderRadius: 16, padding: 12, maxWidth: 420, width: '100%', margin: '0 auto' }} dangerouslySetInnerHTML={{ __html: svg }} />
       </div>
-      <div className="qr-box" style={{ background: '#fff', borderRadius: 16, padding: 12, maxWidth: 360, margin: '0 auto' }} dangerouslySetInnerHTML={{ __html: svg }} />
-      {err && <div className="note red">{err}</div>}
-      <div className="sub" style={{ color: '#c9d3e6' }}>{t('Kod zmienia się co 20 s — zrzut ekranu nie zadziała.')}</div>
-    </div>
+    );
+  return (
+    <section className="card my-qr" onClick={() => setBig(true)} role="button" aria-label={t('Powiększ kod')}>
+      <div className="qr-box my-qr-box" dangerouslySetInnerHTML={{ __html: svg }} />
+      <div className="stack" style={{ gap: 4 }}>
+        <b style={{ fontSize: 18 }}>{t('Przyłóż do tabletu przy wejściu')}</b>
+        <span className="sub">{t('Tak samo jak kartę RCP. Wejście albo wyjście zapisze się samo.')}</span>
+        <span className="sub">{t('Wyjście prywatne: najpierw żółty przycisk na tablecie.')}</span>
+        {err && <span className="note red">{err}</span>}
+      </div>
+    </section>
   );
 }
 
@@ -182,7 +202,6 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
   const { state, backend, user, reload } = useApp();
   const [scan, setScan] = useState<Scan | null>(() => (previewId ? null : scannedToken()));
   const [camera, setCamera] = useState(false);
-  const [myQr, setMyQr] = useState(false);
   useEffect(() => {
     if (previewId) return;
     const on = () => setScan(scannedToken());
@@ -274,16 +293,11 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
                 <div className="sub" style={{ color: '#c9d3e6' }}>{t('Odbicie zapisze się samo — nic więcej nie trzeba klikać.')}</div>
               </div>
             )}
-            {myQr && <MyQr onClose={() => setMyQr(false)} />}
+            {!previewId && <MyQrCard />}
             {!previewId && (
-              <section className="punch-actions">
-                <button type="button" className="btn primary punch-big" onClick={() => setCamera(true)}>
-                  📷 {t('Odbij się — skanuj kod')}
-                </button>
-                <button type="button" className="btn punch-big" onClick={() => setMyQr(true)}>
-                  ▦ {t('Mój kod do tabletu')}
-                </button>
-              </section>
+              <button type="button" className="btn ghost small" onClick={() => setCamera(true)}>
+                📷 {t('Albo zeskanuj telefonem kod z ekranu tabletu')}
+              </button>
             )}
             <section className="card">
               <div className="sub">{previewId ? `${t('Podgląd aplikacji pracownika')} · ${w.email ?? ''}` : user}</div>
