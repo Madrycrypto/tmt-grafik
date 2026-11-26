@@ -3,6 +3,7 @@
 //   vapid  — publiczny klucz VAPID do subskrypcji push (generowany przy pierwszym wywołaniu)
 //   reset  — ustawienie nowego hasła kodem aktywacyjnym {email, code, password}
 //   notify — wysyłka powiadomień do pracowników (tylko admin/edytor) {items:[{workerId, pl:{title,body}, zh:{title,body}}]}
+//   message — wiadomość od przełożonego (admin/edytor) {title?, body, audience, workerIds, important?}; zapis + push
 //   test   — powiadomienie testowe na własne urządzenia zalogowanego
 //   kiosk  — kod QR kiosku RCP (ważny 60 s) i ostatnie odbicia (admin/edytor/kiosk)
 //   punch  — pracownik zeskanował kod kiosku {k, p?: 1 (wyjście prywatne)}; kierunek i czas ustala serwer
@@ -75,7 +76,7 @@ interface Sub {
   subscription: { endpoint: string; keys: { p256dh: string; auth: string } };
 }
 
-async function sendTo(subs: Sub[], pick: (lang: string) => Msg & { url?: string }) {
+async function sendTo(subs: Sub[], pick: (lang: string) => Msg & { url?: string; tag?: string; sticky?: boolean }) {
   await vapid();
   let sent = 0;
   const gone: string[] = [];
@@ -359,6 +360,35 @@ Deno.serve(async (req) => {
           removed += r.removed;
         }
         return json({ sent, removed, workers: ids.length });
+      }
+
+      case 'message': {
+        const email = await callerEmail(req);
+        const role = email ? await roleOf(email) : null;
+        if (role !== 'admin' && role !== 'editor') return json({ error: 'forbidden' }, 403);
+        const text = String(body.body ?? '').trim().slice(0, 2000);
+        const title = String(body.title ?? '').trim().slice(0, 80) || null;
+        const ids = [...new Set((Array.isArray(body.workerIds) ? body.workerIds : []).map(String))].slice(0, 2000);
+        if (!text) return json({ error: 'empty' }, 400);
+        if (!ids.length) return json({ error: 'no_recipients' }, 400);
+        const important = body.important === true;
+        const { data: msg, error } = await admin
+          .from('messages')
+          .insert({ author: email, title, body: text, audience: String(body.audience ?? '').slice(0, 120) || '—', worker_ids: ids, important })
+          .select('id')
+          .single();
+        if (error) return json({ error: error.message }, 400);
+        const { data: subs } = await admin.from('push_subscriptions').select('endpoint,lang,subscription,worker_id').in('worker_id', ids);
+        const short = text.length > 180 ? `${text.slice(0, 177)}…` : text;
+        const r = await sendTo((subs ?? []) as Sub[], (lang) => ({
+          title: `${important ? '❗ ' : ''}${title ?? (lang === 'zh' ? '主管消息' : 'Wiadomość od przełożonego')}`,
+          body: short,
+          url: './#wiadomosci',
+          tag: `msg-${msg.id}`,
+          sticky: important,
+        }));
+        const phones = new Set((subs ?? []).map((s: { worker_id: string }) => s.worker_id)).size;
+        return json({ id: msg.id, recipients: ids.length, phones, ...r });
       }
 
       case 'test': {

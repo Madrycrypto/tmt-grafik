@@ -227,6 +227,9 @@ function WorkerForm({
             <a className="btn small" href={`#/podglad/${initial.id}`}>
               👁 {t('Podgląd aplikacji pracownika')}
             </a>
+            <a className="btn small" href={`#/wiadomosci?do=${encodeURIComponent(initial.id)}`}>
+              ✉ {t('Wyślij wiadomość')}
+            </a>
             {account?.code && (
               <button type="button" className="btn small" onClick={() => onInvite(initial)}>
                 {t('Nowy kod + kartka')}

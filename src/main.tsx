@@ -15,6 +15,7 @@ import Pracownicy from './pages/Pracownicy';
 import Ustawienia from './pages/Ustawienia';
 import Kiosk from './pages/Kiosk';
 import Rcp from './pages/Rcp';
+import Wiadomosci from './pages/Wiadomosci';
 import './index.css';
 
 applyTheme();
@@ -44,6 +45,7 @@ function Root() {
             <Route path="pracownicy" element={<Pracownicy />} />
             <Route path="linie" element={<Linie />} />
             <Route path="rcp" element={<Rcp />} />
+            <Route path="wiadomosci" element={<Wiadomosci />} />
             <Route path="historia" element={<Historia />} />
             <Route path="ustawienia" element={<Ustawienia />} />
             <Route path="wiecej" element={<More />} />

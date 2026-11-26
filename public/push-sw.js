@@ -13,6 +13,7 @@ self.addEventListener('push', (event) => {
       badge: 'icon-192.png',
       tag: data.tag || 'grafik',
       renotify: true,
+      requireInteraction: !!data.sticky,
       data: { url: data.url || './' },
     }),
   );
@@ -25,7 +26,7 @@ self.addEventListener('notificationclick', (event) => {
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((list) => {
       for (const c of list) {
         if (c.url.startsWith(self.registration.scope) && 'focus' in c) {
-          c.postMessage({ type: 'reload-data' });
+          c.postMessage({ type: 'reload-data', url });
           return c.focus();
         }
       }
