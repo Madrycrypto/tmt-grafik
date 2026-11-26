@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { FormEvent, ReactNode } from 'react';
 import { appUrl, writeCloudConfig } from '../data/backend';
-import { LangSwitch } from '../ui';
+import { LangSwitch, ThemeSwitch } from '../ui';
 import type { Backend } from '../data/backend';
 import { t } from '../i18n';
 
@@ -27,6 +27,7 @@ function Frame({ title, sub, children }: { title: string; sub: string; children:
           <div className="sub">{sub}</div>
         </div>
         <LangSwitch />
+        <ThemeSwitch />
         {children}
       </div>
     </div>

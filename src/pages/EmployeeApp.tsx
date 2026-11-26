@@ -15,7 +15,7 @@ import { useApp } from '../data/AppContext';
 import { t } from '../i18n';
 import { disablePush, enablePush, isIos, isStandalone, pushState } from '../push';
 import type { PushState } from '../push';
-import { LangSwitch } from '../ui';
+import { LangSwitch, ThemeSwitch } from '../ui';
 
 interface InstallEvent extends Event {
   prompt: () => Promise<void>;
@@ -231,6 +231,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
         <strong style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{t('TMT Grafik')}</strong>
         <span style={{ display: 'inline-flex', gap: 8, alignItems: 'center' }}>
           <LangSwitch dark />
+          <ThemeSwitch dark />
           {previewId ? (
             <a className="btn small ghost" style={{ color: '#c9d3e6' }} href="#/pracownicy">
               ✕

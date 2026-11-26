@@ -6,6 +6,14 @@
     <link rel="apple-touch-icon" href="./apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="theme-color" content="#1B2230" />
+    <script>
+      // motyw przed pierwszym rysowaniem, żeby nie mignął jasny ekran (logika: src/theme.ts)
+      try {
+        var p = localStorage.getItem('tmt-theme');
+        var d = p === 'dark' || (p !== 'light' && window.matchMedia('(prefers-color-scheme: dark)').matches);
+        document.documentElement.dataset.theme = d ? 'dark' : 'light';
+      } catch (e) {}
+    </script>
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="TMT Grafik" />
     <meta name="robots" content="noindex, nofollow" />

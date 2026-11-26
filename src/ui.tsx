@@ -1,3 +1,5 @@
+import { useTheme } from './theme';
+import type { ThemePref } from './theme';
 import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { fmtRange } from './domain/dates';
@@ -114,6 +116,28 @@ export function LangSwitch({ dark }: { dark?: boolean }) {
       <button type="button" style={{ ...base, ...(lang === 'zh' ? on : off) }} onClick={() => lang !== 'zh' && setLang('zh')}>
         中文
       </button>
+    </span>
+  );
+}
+
+/** Przełącznik motywu: jasny / wg systemu / ciemny. */
+export function ThemeSwitch({ dark }: { dark?: boolean }) {
+  const [pref, setPref] = useTheme();
+  const base: CSSProperties = { border: 0, background: 'transparent', cursor: 'pointer', padding: '4px 7px', borderRadius: 6, fontSize: 13, lineHeight: 1 };
+  const on = dark ? { background: '#2a3447', color: '#fff' } : { background: 'var(--accent-soft)', color: 'var(--accent)' };
+  const off = { color: dark ? '#9eabc2' : 'var(--muted)' };
+  const opts: [ThemePref, string, string][] = [
+    ['light', '☀', t('Motyw jasny')],
+    ['system', '◐', t('Motyw wg systemu')],
+    ['dark', '☾', t('Motyw ciemny')],
+  ];
+  return (
+    <span role="group" aria-label={t('Motyw')} style={{ display: 'inline-flex', gap: 2 }}>
+      {opts.map(([p, icon, label]) => (
+        <button key={p} type="button" title={label} aria-label={label} aria-pressed={pref === p} style={{ ...base, ...(pref === p ? on : off) }} onClick={() => setPref(p)}>
+          {icon}
+        </button>
+      ))}
     </span>
   );
 }

@@ -1,5 +1,6 @@
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
+import { applyTheme, watchSystemTheme } from './theme';
 import { HashRouter, Route, Routes, useParams } from 'react-router-dom';
 import { AppProvider, useApp } from './data/AppContext';
 import EmployeeApp from './pages/EmployeeApp';
@@ -15,6 +16,9 @@ import Ustawienia from './pages/Ustawienia';
 import Kiosk from './pages/Kiosk';
 import Rcp from './pages/Rcp';
 import './index.css';
+
+applyTheme();
+watchSystemTheme();
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

@@ -747,4 +747,8 @@ export const zh: Record<string, string> = {
   'Błąd zapisu': '保存失败',
   'Zwiń menu': '收起菜单',
   'Rozwiń menu': '展开菜单',
+  'Motyw': '主题',
+  'Motyw jasny': '浅色主题',
+  'Motyw wg systemu': '跟随系统',
+  'Motyw ciemny': '深色主题',
 };

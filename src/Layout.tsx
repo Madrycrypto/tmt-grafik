@@ -1,6 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useApp } from './data/AppContext';
-import { Icon, LangSwitch, usePersistent } from './ui';
+import { Icon, LangSwitch, ThemeSwitch, usePersistent } from './ui';
 import { t } from './i18n';
 
 export const NAV = [
@@ -79,7 +79,12 @@ export default function Layout() {
         ))}
         <div className="side-foot">
           <UndoButtons dark compact={mini} />
-          {!mini && <LangSwitch dark />}
+          {!mini && (
+            <span style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+              <LangSwitch dark />
+              <ThemeSwitch dark />
+            </span>
+          )}
           <SyncBadge dark />
           {!mini && <span>{user}</span>}
         </div>
@@ -121,6 +126,10 @@ export function More() {
           {t(n.label)}
         </NavLink>
       ))}
+      <div className="row" style={{ justifyContent: 'space-between', alignItems: 'center', paddingTop: 12 }}>
+        <span>{t('Motyw')}</span>
+        <ThemeSwitch />
+      </div>
     </div>
   );
 }
