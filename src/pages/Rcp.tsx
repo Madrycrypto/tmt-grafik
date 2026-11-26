@@ -7,6 +7,7 @@ import type { DayCheck, Punch } from '../domain/punches';
 import { LineOptions, TypeTag } from '../ui';
 import { WorkerEditor } from './Pracownicy';
 import TnaImport from './TnaImport';
+import TnaLive, { TnaBadge, useTna } from './TnaLive';
 import { t } from '../i18n';
 
 const PROBLEM = new Set(['late', 'early', 'late_early', 'no_in', 'no_out', 'missing', 'unplanned']);
@@ -58,6 +59,8 @@ export default function Rcp() {
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [openWorker, setOpenWorker] = useState<string | null>(null);
   const [tna, setTna] = useState(false);
+  const [live, setLive] = useState(false);
+  const tnaLive = useTna();
   const { punches, error, reload } = usePunches(addDays(date, -1), addDays(date, 1));
 
   const nowH = date === todayIso() ? new Date().getHours() + new Date().getMinutes() / 60 : date > todayIso() ? -99 : 99;
@@ -147,9 +150,10 @@ export default function Rcp() {
               <button type="button" className="btn small" aria-label={t('Następny dzień')} onClick={() => setDate(addDays(date, 1))}>›</button>
             </div>
           </label>
+          {backend.client && <TnaBadge tna={tnaLive} onClick={() => setLive(true)} />}
           {canEdit && (
-            <button type="button" className="btn" title={t('Wgraj plik z odbiciami z czytnika Comarch TNA')} onClick={() => setTna(true)}>
-              {t('Import z TNA')}
+            <button type="button" className="btn ghost" title={t('Wgraj plik z odbiciami z czytnika Comarch TNA (gdy API nie działa)')} onClick={() => setTna(true)}>
+              {t('Import z pliku')}
             </button>
           )}
           <a className="btn" href="#/kiosk" target="_blank" rel="noreferrer">{t('Otwórz kiosk')}</a>
@@ -259,6 +263,7 @@ export default function Rcp() {
           {t('Tolerancja 5 min. Odbicia do 4 h przed i po zmianie liczą się do tej zmiany; nocka kończy się następnego dnia. ✎ = dodane ręcznie, ✓ = zatwierdzone wg grafiku, ↗ = wyjście prywatne, ↩ = powrót.')}
         </div>
       </section>
+      {live && <TnaLive tna={tnaLive} onClose={() => setLive(false)} />}
       {tna && <TnaImport onClose={() => setTna(false)} onDone={() => void reload()} />}
       {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}
     </>

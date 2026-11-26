@@ -10,8 +10,14 @@
 //   my_qr  — krótkotrwały kod pracownika do pokazania tabletowi
 //   badges — kody kart QR do wydruku (admin/edytor) {workerIds}
 //   unpunch — cofnięcie pomyłkowego odbicia w ciągu 2 min {id}
+//   tna_config — zapis klucza API Comarch TNA (admin) {clientId, clientSecret}; sprawdza połączenie
+//   tna_status — stan połączenia z TNA i niedopasowane konta (admin/edytor/podgląd)
+//   tna_sync — pobranie odbić z TNA (admin/edytor albo zadanie cykliczne z nagłówkiem x-cron-key)
+//   tna_link — ręczne powiązanie konta TNA z pracownikiem (admin/edytor) {userHash, workerId|null}
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3.6.7';
+import { matchUsers, toPunch } from './tna.ts';
+import type { TnaScan, TnaUser, WorkerRef } from './tna.ts';
 
 const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, {
   auth: { persistSession: false, autoRefreshToken: false },
@@ -178,6 +184,129 @@ async function recentPunches(limit = 12) {
   return rows.map((r) => ({ id: r.id, at: r.at, dir: r.dir, ret: r.ret, name: names.get(String(r.workerId)) ?? '?' }));
 }
 
+// ---------- Comarch TNA Public API ----------
+const TNA = 'https://tna.comarch.com/api';
+let tnaTokenCache: { token: string; until: number; key: string } | null = null;
+
+async function secret(name: string): Promise<string | null> {
+  const { data } = await admin.from('app_secrets').select('value').eq('name', name).maybeSingle();
+  return (data?.value as string | undefined) ?? null;
+}
+async function setSecret(name: string, value: string) {
+  await admin.from('app_secrets').upsert({ name, value });
+}
+async function jsonSecret<T>(name: string, fallback: T): Promise<T> {
+  const v = await secret(name);
+  try {
+    return v ? (JSON.parse(v) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+async function tnaToken(id?: string, key?: string): Promise<string> {
+  const clientId = id ?? (await secret('tna_client_id'));
+  const clientSecret = key ?? (await secret('tna_client_secret'));
+  if (!clientId || !clientSecret) throw new Error('tna_not_configured');
+  const cacheKey = clientId;
+  if (!id && tnaTokenCache && tnaTokenCache.key === cacheKey && tnaTokenCache.until > Date.now()) return tnaTokenCache.token;
+  const r = await fetch(`${TNA}/oauth/token`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded', Authorization: 'Basic ' + btoa(`${clientId}:${clientSecret}`) },
+    body: 'grant_type=client_credentials',
+  });
+  if (!r.ok) throw new Error(`tna_auth_${r.status}`);
+  const j = (await r.json()) as { access_token: string; expires_in?: number; scope?: string };
+  const token = j.access_token;
+  if (!id) tnaTokenCache = { token, key: cacheKey, until: Date.now() + Math.max(60, (j.expires_in ?? 600) - 60) * 1000 };
+  return token;
+}
+
+async function tnaGet<T>(path: string, token: string): Promise<T> {
+  const r = await fetch(`${TNA}${path}`, { headers: { Authorization: `Bearer ${token}`, Accept: 'application/json' } });
+  if (!r.ok) throw new Error(`tna_http_${r.status}_${path.split('?')[0]}`);
+  return (await r.json()) as T;
+}
+
+/** Lista kont TNA — tablica albo obiekt ze stronicowaniem ({value} / {content}). */
+async function tnaUsers(token: string): Promise<TnaUser[]> {
+  const raw = await tnaGet<TnaUser[] | { value?: TnaUser[]; content?: TnaUser[] }>('/v2/users', token);
+  return Array.isArray(raw) ? raw : (raw.value ?? raw.content ?? []);
+}
+
+async function appWorkers(): Promise<WorkerRef[]> {
+  const out: WorkerRef[] = [];
+  for (let i = 0; ; i += 1000) {
+    const { data } = await admin.from('records').select('id,data').eq('kind', 'workers').range(i, i + 999);
+    for (const r of data ?? []) {
+      const d = r.data as { name: string; email?: string; active?: boolean };
+      out.push({ id: r.id, name: d.name, email: d.email, active: d.active });
+    }
+    if (!data || data.length < 1000) break;
+  }
+  return out;
+}
+
+interface TnaState { lastSync?: string; lastOk?: string; lastError?: string | null; added?: number; users?: number; matched?: number; unmatched?: { userHash: string; name?: string; email?: string }[] }
+
+function isoDay(d: Date): string {
+  return d.toISOString().slice(0, 10);
+}
+
+/** Pobiera odbicia z ostatnich dni ze wszystkich kont TNA i zapisuje je jako odbicia aplikacji. */
+async function tnaSync(days = 2): Promise<TnaState> {
+  const state = await jsonSecret<TnaState>('tna_state', {});
+  const now = new Date();
+  try {
+    const token = await tnaToken();
+    const users = await tnaUsers(token);
+    const links = await jsonSecret<Record<string, string>>('tna_links', {});
+    const { map, unmatched } = matchUsers(users, await appWorkers(), links);
+    const from = isoDay(new Date(now.getTime() - days * 86_400_000));
+    const till = isoDay(new Date(now.getTime() + 86_400_000));
+    const punches: Record<string, unknown>[] = [];
+    for (let page = 0; page < 200; page++) {
+      const res = await tnaGet<{ value: { userHash: string; scans: TnaScan[] }[]; page?: { last?: boolean; totalPages?: number } }>(`/v2/history?from=${from}&till=${till}&page=${page}&size=100`, token);
+      for (const u of res.value ?? []) {
+        const wid = map.get(u.userHash);
+        if (!wid) continue;
+        for (const sc of u.scans ?? []) {
+          const p = toPunch(sc, wid);
+          if (p) punches.push(p);
+        }
+      }
+      if (!res.page || res.page.last || (res.page.totalPages !== undefined && page + 1 >= res.page.totalPages) || !(res.value ?? []).length) break;
+    }
+    // tylko nowe — istniejących (także poprawionych ręcznie w RCP) nie nadpisujemy
+    const ids = punches.map((p) => String(p.id));
+    const have = new Set<string>();
+    for (let i = 0; i < ids.length; i += 200) {
+      const { data } = await admin.from('records').select('id').eq('kind', 'punches').in('id', ids.slice(i, i + 200));
+      for (const r of data ?? []) have.add(r.id);
+    }
+    const fresh = punches.filter((p) => !have.has(String(p.id)));
+    for (let i = 0; i < fresh.length; i += 500) {
+      const { error } = await admin.from('records').insert(fresh.slice(i, i + 500).map((p) => ({ kind: 'punches', id: p.id, data: p, updated_by: 'comarch-tna' })));
+      if (error) throw new Error(error.message);
+    }
+    const next: TnaState = {
+      lastSync: now.toISOString(),
+      lastOk: now.toISOString(),
+      lastError: null,
+      added: fresh.length,
+      users: users.length,
+      matched: map.size,
+      unmatched: unmatched.filter((u) => u.state !== 'INACTIVE').map((u) => ({ userHash: u.userHash, name: u.nameAndLastname, email: u.email })),
+    };
+    await setSecret('tna_state', JSON.stringify(next));
+    return next;
+  } catch (e) {
+    const next = { ...state, lastSync: now.toISOString(), lastError: (e as Error).message };
+    await setSecret('tna_state', JSON.stringify(next));
+    return next;
+  }
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: cors });
   if (req.method !== 'POST') return json({ error: 'POST only' }, 405);
@@ -323,6 +452,59 @@ Deno.serve(async (req) => {
         if (Date.now() - Date.parse(p.at) > UNDO_MS) return json({ error: 'too_late' }, 400);
         await admin.from('records').delete().eq('kind', 'punches').eq('id', p.id);
         return json({ ok: true });
+      }
+
+      case 'tna_config': {
+        const email = await callerEmail(req);
+        if (!email || (await roleOf(email)) !== 'admin') return json({ error: 'forbidden' }, 403);
+        const clientId = String(body.clientId ?? '').trim();
+        const clientSecret = String(body.clientSecret ?? '').trim();
+        if (!clientId || !clientSecret) return json({ error: 'invalid_input' }, 400);
+        try {
+          const token = await tnaToken(clientId, clientSecret);
+          const users = await tnaUsers(token);
+          await setSecret('tna_client_id', clientId);
+          await setSecret('tna_client_secret', clientSecret);
+          tnaTokenCache = null;
+          const st = await tnaSync(7);
+          return json({ ok: true, users: users.length, state: st });
+        } catch (e) {
+          return json({ error: (e as Error).message }, 400);
+        }
+      }
+
+      case 'tna_status': {
+        const email = await callerEmail(req);
+        const role = email ? await roleOf(email) : null;
+        if (role !== 'admin' && role !== 'editor' && role !== 'viewer') return json({ error: 'forbidden' }, 403);
+        return json({ configured: !!(await secret('tna_client_id')), state: await jsonSecret<TnaState>('tna_state', {}) });
+      }
+
+      case 'tna_sync': {
+        const cronKey = req.headers.get('x-cron-key');
+        let ok = false;
+        if (cronKey) ok = cronKey === (await secret('cron_key'));
+        else {
+          const email = await callerEmail(req);
+          const role = email ? await roleOf(email) : null;
+          ok = role === 'admin' || role === 'editor';
+        }
+        if (!ok) return json({ error: 'forbidden' }, 403);
+        if (!(await secret('tna_client_id'))) return json({ configured: false });
+        return json({ configured: true, state: await tnaSync(Number(body.days) > 0 ? Math.min(31, Number(body.days)) : 2) });
+      }
+
+      case 'tna_link': {
+        const email = await callerEmail(req);
+        const role = email ? await roleOf(email) : null;
+        if (role !== 'admin' && role !== 'editor') return json({ error: 'forbidden' }, 403);
+        const links = await jsonSecret<Record<string, string>>('tna_links', {});
+        const hash = String(body.userHash ?? '');
+        if (!hash) return json({ error: 'invalid_input' }, 400);
+        if (body.workerId) links[hash] = String(body.workerId);
+        else delete links[hash];
+        await setSecret('tna_links', JSON.stringify(links));
+        return json({ ok: true, state: await tnaSync(7) });
       }
 
       default:
