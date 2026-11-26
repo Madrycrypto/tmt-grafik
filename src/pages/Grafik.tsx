@@ -7,7 +7,8 @@ import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import type { BrigadeId, Exclusion } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
-import { usePersistent } from '../ui';
+import { LineOptions, usePersistent } from '../ui';
+import { monthNorm } from '../domain/norm';
 import HrExportSheet from './HrExport';
 import { t } from '../i18n';
 
@@ -16,8 +17,14 @@ const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C
 export default function Grafik() {
   const { state, update } = useApp();
   const [month, setMonth] = useState(todayIso().slice(0, 7));
+  const [scope, setScope] = usePersistent('grafik-line', 'all');
+  // zakres: 'all', 'g:<grupa>' (linia główna, np. CFM) albo id linii
+  const scopeLines = scope === 'all' ? state.lines : scope.startsWith('g:') ? state.lines.filter((l) => l.group === scope.slice(2)) : state.lines.filter((l) => l.id === scope);
+  const scopePatterns = state.patterns.filter((p) => scope === 'all' || scopeLines.some((l) => !l.patternIds?.length || l.patternIds.includes(p.id)));
   const [patternId, setPatternId] = usePersistent('pattern', state.patterns[0]?.id ?? '');
-  const pattern = state.patterns.find((p) => p.id === patternId) ?? state.patterns[0];
+  const pattern = scopePatterns.find((p) => p.id === patternId) ?? scopePatterns[0] ?? state.patterns[0];
+  const norm = monthNorm(month);
+  const groups = [...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))];
   const days = monthDays(month);
   const label = (code: string) => t(code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
   const colorOf = (code: string) => {
@@ -25,7 +32,7 @@ export default function Grafik() {
     return d ? `c-${d.label}${d.hours}` : 'c-W';
   };
   const usedBy = (pid: string) =>
-    state.lines
+    scopeLines
       .filter((l) => !l.patternIds?.length || l.patternIds.includes(pid))
       .map((l) => l.name)
       .join(', ');
@@ -66,7 +73,8 @@ export default function Grafik() {
     });
   };
 
-  const membersOf = (b: BrigadeId) => state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b).length;
+  const membersOf = (b: BrigadeId) =>
+    state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && (scope === 'all' || scopeLines.some((l) => l.id === w.lineId))).length;
 
   return (
     <>
@@ -77,9 +85,21 @@ export default function Grafik() {
         </div>
         <div className="row">
           <label className="field">
-            {t('Wzorzec')}
+            {t('Linia')}
+            <select value={scope} onChange={(e) => setScope(e.target.value)}>
+              <option value="all">{t('cały zakład')}</option>
+              {groups.map((g) => (
+                <option key={g} value={`g:${g}`}>
+                  {g} — {t('cała linia główna')}
+                </option>
+              ))}
+              <LineOptions state={state} />
+            </select>
+          </label>
+          <label className="field">
+            {t('System zmianowy')}
             <select value={pattern.id} onChange={(e) => setPatternId(e.target.value)}>
-              {state.patterns.map((p) => (
+              {scopePatterns.map((p) => (
                 <option key={p.id} value={p.id}>
                   {p.name}
                   {usedBy(p.id) ? ` — ${usedBy(p.id)}` : ''}
@@ -111,7 +131,10 @@ export default function Grafik() {
                     {d.slice(8)}
                   </th>
                 ))}
-                <th style={{ width: 120, textAlign: 'center' }}>{t('Dni / cel · godz.')}</th>
+                <th style={{ width: 150, textAlign: 'center' }} title={t('Wymiar czasu pracy w tym miesiącu: {h} h ({d} dni roboczych)', { h: norm.hours, d: norm.workdays })}>
+                  {t('Dni · godz. / wymiar')}
+                  <div className="sub" style={{ fontWeight: 400 }}>{t('wymiar')} {norm.hours} h</div>
+                </th>
               </tr>
             </thead>
             <tbody>
@@ -155,7 +178,12 @@ export default function Grafik() {
                     })}
                     <td style={{ textAlign: 'center', fontWeight: 600 }}>
                       {s.days}
-                      {s.target !== undefined ? ` / ${s.target}` : ''} · {s.hours} h
+                      {s.target !== undefined ? ` / ${s.target}` : ''} {t('dni')} · {s.hours} h
+                      <div>
+                        <span className={`tag ${s.hours < norm.hours ? 'red' : s.hours > norm.hours ? 'amber' : 'green'}`} title={s.hours < norm.hours ? t('Za mało godzin względem wymiaru — brakujące godziny trzeba dopełnić (np. na innej linii)') : s.hours > norm.hours ? t('Więcej godzin niż wymiar — nadgodziny albo odbiór dni wolnych') : t('Zgodnie z wymiarem')}>
+                          {s.hours === norm.hours ? '✓' : `${s.hours > norm.hours ? '+' : '−'}${Math.abs(s.hours - norm.hours)} h`}
+                        </span>
+                      </div>
                     </td>
                   </tr>
                 );
@@ -190,6 +218,46 @@ export default function Grafik() {
           <span><span className="cell c-excluded">✕</span>{t('wyłączone')}</span>
           <span><span className="cell c-holiday">{t('Ś')}</span>{t('święto ustawowe')}{holidaysOff(pattern) ? '' : ` (${t('ten system pracuje w święta')})`}</span>
           <span><span className="cell c-W c-ov">{t('R')}</span>{t('zmiana ręczna')}</span>
+        </div>
+      </section>
+
+      <section className="card">
+        <div className="card-head">
+          <h2>{t('Bilans godzin')} — {month}</h2>
+          <span className="sub">{t('wymiar czasu pracy: {h} h ({d} dni roboczych × 8 h)', { h: norm.hours, d: norm.workdays })}</span>
+        </div>
+        <div className="row" style={{ alignItems: 'stretch' }}>
+          {rows.map(({ b, cells }) => {
+            const s = summary.find((x) => x.brigade === b)!;
+            const diff = s.hours - norm.hours;
+            const lost = (st: string) => cells.filter((c) => c.status === st).reduce((h, c) => h + (state.shiftDefs.find((d) => d.code === c.code)?.hours ?? 0), 0);
+            const excluded = lost('excluded');
+            const holidays = lost('holiday');
+            const trimmed = lost('trimmed');
+            const n = membersOf(b);
+            return (
+              <div key={b} className="kpi" style={{ minWidth: 200, flex: '1 1 200px' }}>
+                <div className="k">
+                  <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
+                  {t('Brygada')} {b} · {n} {t('os.')}
+                </div>
+                <div className="v" style={{ color: diff < 0 ? 'var(--red-ink)' : diff > 0 ? 'var(--amber-ink)' : 'var(--green-ink)' }}>
+                  {diff === 0 ? '✓ 0 h' : `${diff > 0 ? '+' : '−'}${Math.abs(diff)} h`}
+                </div>
+                <div className="d">
+                  {s.hours} h / {norm.hours} h
+                  {excluded > 0 && <> · {t('wyłączenia')} −{excluded} h</>}
+                  {holidays > 0 && <> · {t('święta')} −{holidays} h</>}
+                  {trimmed > 0 && <> · {t('cel dni')} −{trimmed} h</>}
+                </div>
+                {diff < 0 && n > 0 && (
+                  <div className="d" style={{ color: 'var(--red-ink)' }}>
+                    {t('razem do dopełnienia: {h} h (≈ {s} zmian na osobę)', { h: -diff * n, s: Math.ceil(-diff / 8) })}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </div>
       </section>
 
