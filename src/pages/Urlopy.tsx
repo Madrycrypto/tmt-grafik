@@ -241,7 +241,9 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
     const idx = days.indexOf(todayIso());
     if (yearMode && box.current) box.current.scrollLeft = idx > 0 ? idx * dayW : 0;
   }, [yearMode, period, days, dayW]);
-  const nameCol = 200;
+  // na wąskim ekranie kolumna nazwisk jest węższa (patrz .sticky-col), więc przyklejone saldo musi zaczynać się tuż za nią
+  const narrow = typeof window !== 'undefined' && window.matchMedia('(max-width: 860px)').matches;
+  const nameCol = narrow ? 120 : 200;
   const stickyLeft = { position: 'sticky' as const, left: nameCol, background: 'var(--surface)', zIndex: 1 };
   const poolInput = (w: Worker, pool: number | undefined) => (
     <input className="input" type="number" min={0} style={{ width: 58, padding: '2px 4px', textAlign: 'center' }} value={pool ?? ''} disabled={!canEdit} onChange={(e) => setPool(w.id, e.target.value)} />
@@ -250,7 +252,18 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
   return (
     <section className="card">
       <div className="scroll-x" ref={box}>
-        <table style={{ minWidth: dayW * days.length + 420 + 90, tableLayout: 'fixed' }}>
+        <table style={{ minWidth: dayW * days.length + nameCol + 96 + 70 + 70 + 64, tableLayout: 'fixed' }}>
+          {/* przy tableLayout fixed szerokości bierze się z pierwszego wiersza (u nas z nagłówkiem miesięcy z colSpan), więc podajemy je wprost */}
+          <colgroup>
+            <col style={{ width: nameCol }} />
+            <col style={{ width: 96 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 70 }} />
+            <col style={{ width: 64 }} />
+            {days.map((d) => (
+              <col key={d} style={{ width: dayW }} />
+            ))}
+          </colgroup>
           <thead>
             {yearMode && (
               <tr>
@@ -265,11 +278,11 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
               </tr>
             )}
             <tr>
-              <th className="sticky-col" style={{ width: nameCol }}>{t('Pracownik')}</th>
+              <th className="sticky-col" style={{ width: nameCol, maxWidth: nameCol }}>{t('Pracownik')}</th>
               <th style={{ ...stickyLeft, width: 96, textAlign: 'center', zIndex: 2 }} title={t('Zostanie z puli po wszystkich zaplanowanych urlopach; pod spodem ile można zaplanować do listopada (4 dni zostają na żądanie)')}>{t('Zostanie')}</th>
               <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>
               <th style={{ width: 70, textAlign: 'center' }}>{t('UW w roku')}</th>
-              <th style={{ width: 54 }}>{t('Brygada')}</th>
+              <th style={{ width: 64 }}>{t('Brygada')}</th>
               {days.map((d) => (
                 <th
                   key={d}
