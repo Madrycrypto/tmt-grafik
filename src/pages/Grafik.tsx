@@ -11,11 +11,12 @@ import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent } from '../ui';
 import { monthNorm } from '../domain/norm';
 import { patternPeriod, periodLabel, periodMonths, SETTLEMENT_OPTIONS } from '../domain/settlement';
+import { BRIGADE_COLOR, buildPrintWorkbook, printFileName } from '../domain/printExport';
+import { downloadXlsx } from './WorkerBulk';
 import HrExportSheet from './HrExport';
 import FillSheet from './FillSheet';
 import { t } from '../i18n';
 
-const BRIGADE_COLOR: Record<BrigadeId, string> = { A: '#2457D6', B: '#E07A1F', C: '#0F8C7E', D: '#7A4FD0' };
 
 export default function Grafik() {
   const { state, update, undo } = useApp();
@@ -70,6 +71,12 @@ export default function Grafik() {
 
   if (!pattern) return <div className="card empty">{t('Brak zdefiniowanych wzorców zmian (Ustawienia).')}</div>;
   const codes = patternShiftCodes(pattern);
+
+  const printXlsx = () => {
+    const scopeName = scope === 'all' ? 'Cały zakład' : scope.startsWith('g:') ? scope.slice(2) : (scopeLines[0]?.name ?? '');
+    const bytes = buildPrintWorkbook(state, { patternId: pattern.id, month, scopeName, lineIds: scopeLines.map((l) => l.id) });
+    downloadXlsx(printFileName(scopeName, pattern.name, month), bytes);
+  };
 
   const cycle = (b: BrigadeId, c: RotaCell) => {
     const options = [...codes, OFF];
@@ -134,6 +141,9 @@ export default function Grafik() {
             {t('Miesiąc')}
             <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
           </label>
+          <button type="button" className="btn" onClick={printXlsx} title={t('Plik .xlsx ustawiony do wydruku na A4: brygady i lista pracowników, każda brygada na osobnej stronie')}>
+            {t('Eksport do Excela (druk)')}
+          </button>
           <button type="button" className="btn primary" onClick={() => setHr(true)}>
             {t('Eksport dla kadr')}
           </button>

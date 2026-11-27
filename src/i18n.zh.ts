@@ -211,6 +211,8 @@ export const zh: Record<string, string> = {
   // grafik
   Wzorzec: '班制',
   'Eksport dla kadr': '导出给人事',
+  'Eksport do Excela (druk)': '导出Excel（打印）',
+  'Plik .xlsx ustawiony do wydruku na A4: brygady i lista pracowników, każda brygada na osobnej stronie': '为A4打印设置的.xlsx文件：班组总表和员工名单，每个班组一页',
   'kliknij komórkę, aby zmienić zmianę ręcznie': '点击单元格可手动修改班次',
   'Dni / cel · godz.': '天数 / 目标 · 小时',
   'pracownicy w tym systemie na wszystkich liniach': '所有产线中使用该班制的员工',

@@ -15,6 +15,14 @@ export function downloadCsv(name: string, csv: string): void {
   URL.revokeObjectURL(a.href);
 }
 
+export function downloadXlsx(name: string, bytes: Uint8Array): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([bytes as BlobPart], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' }));
+  a.download = name;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
 async function readFileRows(file: File): Promise<Cell[][]> {
   if (/\.xlsx$/i.test(file.name)) {
     const { readSheet } = await import('read-excel-file/browser');
