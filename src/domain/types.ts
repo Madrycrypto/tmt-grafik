@@ -97,6 +97,12 @@ export interface Worker {
   alsoStationIds?: string[];
   /** pozostała pula urlopu wypoczynkowego w dniach (np. z systemu kadrowego), do planowania urlopów */
   leaveDays?: number;
+  /** data zatrudnienia (RRRR-MM-DD) */
+  hireDate?: string;
+  /** koniec obecnej umowy; brak = umowa bezterminowa albo nie wpisano */
+  contractEnd?: string;
+  /** do kiedy ważne badanie lekarskie dopuszczające do pracy (sama data, bez wyniku) */
+  medicalExpiry?: string;
 }
 
 export type AbsenceReason = 'L4' | 'UW' | 'NN' | 'INNE';

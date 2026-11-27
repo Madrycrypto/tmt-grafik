@@ -62,8 +62,29 @@ const HEADERS: Record<string, string[]> = {
   station: ['stanowisko', 'stanowisko macierzyste', '工位'],
   active: ['aktywny', 'status', '在职', '状态'],
   email: ['e-mail', 'email', 'mail', 'adres e-mail', '邮箱'],
+  hire: ['data zatrudnienia', 'zatrudniony od', 'zatrudnienie od', 'od kiedy', '入职日期'],
+  contractEnd: ['koniec umowy', 'umowa do', 'data konca umowy', 'data zakonczenia umowy', 'umowa konczy sie', '合同到期'],
+  medical: ['badanie wazne do', 'badania wazne do', 'badanie do', 'badania do', 'badanie lekarskie', 'badania lekarskie', 'wazne badania', '体检到期'],
+  leave: ['pula urlopu', 'urlop pozostalo', 'pozostalo dni urlopu', 'system pozostalo dni'],
   hours: ['dlugosc zmiany', 'godziny zmiany', 'zmiana h', '班次时长'],
 };
+
+/** Data z arkusza: RRRR-MM-DD, DD.MM.RRRR, DD/MM/RRRR (dzień pierwszy) albo numer seryjny Excela. */
+export function parseDate(raw: string): string | undefined {
+  const v = raw.trim();
+  if (!v) return undefined;
+  let m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(v);
+  let y: number, mo: number, d: number;
+  if (m) [y, mo, d] = [+m[1], +m[2], +m[3]];
+  else if ((m = /^(\d{1,2})[./-](\d{1,2})[./-](\d{4})$/.exec(v))) [d, mo, y] = [+m[1], +m[2], +m[3]];
+  else if (/^\d{5}$/.test(v)) {
+    const dt = new Date(Date.UTC(1899, 11, 30) + Number(v) * 86_400_000);
+    [y, mo, d] = [dt.getUTCFullYear(), dt.getUTCMonth() + 1, dt.getUTCDate()];
+  } else return undefined;
+  const dt = new Date(Date.UTC(y, mo - 1, d));
+  if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return undefined;
+  return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+}
 
 export interface ImportItem {
   row: number;
@@ -203,6 +224,19 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
     if (emailRaw && !email) item.warnings.push(t('niepoprawny e-mail „{raw}”', { raw: emailRaw }));
     const hRaw = Number(get(r, 'hours').replace(/[^0-9]/g, ''));
     const shiftHours = col.hours === undefined ? existing?.shiftHours : hRaw === 8 || hRaw === 12 ? hRaw : undefined;
+    const dateOf = (key: 'hire' | 'contractEnd' | 'medical', prev: string | undefined, label: string) => {
+      if (col[key] === undefined) return prev;
+      const raw = get(r, key);
+      if (!raw) return undefined;
+      const d = parseDate(raw);
+      if (!d) item.warnings.push(t('niepoprawna data „{raw}” ({label})', { raw, label }));
+      return d;
+    };
+    const hireDate = dateOf('hire', existing?.hireDate, 'zatrudnienie');
+    const contractEnd = dateOf('contractEnd', existing?.contractEnd, 'koniec umowy');
+    const medicalExpiry = dateOf('medical', existing?.medicalExpiry, 'badanie');
+    const leaveRaw = get(r, 'leave').replace(',', '.');
+    const leaveDays = col.leave === undefined ? existing?.leaveDays : leaveRaw !== '' && Number.isFinite(Number(leaveRaw)) && Number(leaveRaw) >= 0 ? Number(leaveRaw) : undefined;
     item.worker = {
       id: existing?.id ?? uid('w'),
       name,
@@ -216,6 +250,11 @@ export function planImport(state: AppState, rows: Cell[][], updateExisting: bool
       skills,
       ...(email ? { email } : {}),
       ...(shiftHours ? { shiftHours } : {}),
+      ...(existing?.alsoStationIds ? { alsoStationIds: existing.alsoStationIds } : {}),
+      ...(hireDate ? { hireDate } : {}),
+      ...(contractEnd ? { contractEnd } : {}),
+      ...(medicalExpiry ? { medicalExpiry } : {}),
+      ...(leaveDays !== undefined ? { leaveDays } : {}),
     };
     item.action = existing ? 'update' : 'new';
     return item;
@@ -268,7 +307,7 @@ function csvCell(v: string | number): string {
 export function workersCsv(state: AppState, workers: Worker[]): string {
   const stationNames = [...new Set([...state.stations].sort((a, b) => a.order - b.order).map((s) => s.name))];
   const systemOf = (w: Worker) => state.patterns.find((x) => x.id === w.patternId)?.name ?? '';
-  const head = ['Imię i nazwisko', 'Typ', 'Agencja', 'System', 'Brygada', 'Linia', 'Stanowisko', 'Aktywny', 'E-mail', 'Długość zmiany', ...stationNames];
+  const head = ['Imię i nazwisko', 'Typ', 'Agencja', 'System', 'Brygada', 'Linia', 'Stanowisko', 'Aktywny', 'E-mail', 'Długość zmiany', 'Data zatrudnienia', 'Koniec umowy', 'Badanie ważne do', 'Pula urlopu', ...stationNames];
   const lines = workers.map((w) => {
     const lineStations = state.stations.filter((s) => s.lineId === w.lineId);
     return [
@@ -282,6 +321,10 @@ export function workersCsv(state: AppState, workers: Worker[]): string {
       w.active ? 'tak' : 'nie',
       w.email ?? '',
       w.shiftHours ? `${w.shiftHours}h` : '',
+      w.hireDate ?? '',
+      w.contractEnd ?? '',
+      w.medicalExpiry ?? '',
+      w.leaveDays ?? '',
       ...stationNames.map((n) => {
         const st = lineStations.find((s) => s.name === n);
         return st ? (w.skills[st.id]?.level ?? 0) : '';

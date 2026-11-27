@@ -935,4 +935,11 @@ export const zh: Record<string, string> = {
   'Luki na stanowiskach': '工位缺口',
   'Maks. urlopów dziennie': '每日休假上限',
   'Import urlopów z arkusza': '从表格导入休假',
+  'Data zatrudnienia': '入职日期',
+  'Koniec umowy': '合同到期',
+  'Badanie ważne do': '体检有效期至',
+  'Terminy umów i badań': '合同与体检到期',
+  'umowa': '合同',
+  'badanie lekarskie': '体检',
+  'dzisiaj': '今天',
 };

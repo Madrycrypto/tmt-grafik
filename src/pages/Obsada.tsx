@@ -7,7 +7,8 @@ import type { RosterEntry, StationStatus } from '../domain/coverage';
 import { addDays, fmtDate, fmtHour, fmtRange, todayIso } from '../domain/dates';
 import { OFF, REASON_LABEL, canPair, linePatterns } from '../domain/types';
 import { useApp } from '../data/AppContext';
-import { Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
+import { deadlines } from '../domain/deadlines';
+import { DeadlinesCard, Level, LineSelect, TypeTag, currentWindowCode, shiftLabel, useLine } from '../ui';
 import ReplacementSheet from './ReplacementSheet';
 import { WorkerEditor } from './Pracownicy';
 import { autoAssign } from '../domain/autoAssign';
@@ -204,6 +205,7 @@ export default function Obsada() {
 
   return (
     <>
+      <DeadlinesCard compact items={deadlines(state, todayIso())} />
       <div className="page-head">
         <div>
           <div className="sub">

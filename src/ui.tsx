@@ -3,6 +3,7 @@ import type { ThemePref } from './theme';
 import { useEffect, useState } from 'react';
 import type { CSSProperties, ReactNode } from 'react';
 import { fmtRange } from './domain/dates';
+import type { Deadline } from './domain/deadlines';
 import type { AppState, ShiftDef, Worker } from './domain/types';
 import { LEVEL_LABEL, TYPE_LABEL } from './domain/types';
 import { lang, setLang, t } from './i18n';
@@ -285,4 +286,41 @@ export function useLine(state: AppState): [string, (v: string) => void] {
   const [lineId, setLineId] = usePersistent('line', state.lines[0]?.id ?? '');
   const valid = state.lines.some((l) => l.id === lineId) ? lineId : (state.lines[0]?.id ?? '');
   return [valid, setLineId];
+}
+
+/** Lista umów i badań lekarskich, które się kończą lub już minęły; w trybie compact tylko baner z odnośnikiem. */
+export function DeadlinesCard({ items, onOpen, compact }: { items: Deadline[]; onOpen?: (workerId: string) => void; compact?: boolean }) {
+  const urgent = items.filter((x) => x.urgent);
+  if (!urgent.length) return null;
+  const kind = (k: Deadline['kind']) => (k === 'contract' ? t('umowa') : t('badanie lekarskie'));
+  const when = (d: number) => (d < 0 ? t('minęło {n} dni temu', { n: -d }) : d === 0 ? t('dzisiaj') : t('za {n} dni', { n: d }));
+  const tone = (d: number) => (d <= 14 ? 'red' : 'amber');
+  if (compact)
+    return (
+      <a href="#/pracownicy" className="card" style={{ display: 'block', marginBottom: 14, textDecoration: 'none', color: 'inherit' }}>
+        <b>{urgent.length}</b> {t('terminów umów i badań lekarskich w ciągu 30 dni')} — {urgent.filter((x) => x.days < 0).length > 0 ? <span className="tag red">{t('są po terminie')}</span> : t('zobacz listę w Pracownikach')}
+      </a>
+    );
+  return (
+    <section className="card" style={{ marginBottom: 14 }}>
+      <div className="card-head">
+        <h2>{t('Terminy umów i badań')}</h2>
+        <span className="sub">{t('Przypomnienie na 30 dni przed końcem; po terminie pozostaje na liście')}</span>
+      </div>
+      <table>
+        <tbody>
+          {items.map((x) => (
+            <tr key={`${x.workerId}-${x.kind}`} style={onOpen ? { cursor: 'pointer' } : undefined} onClick={() => onOpen?.(x.workerId)}>
+              <td style={{ fontWeight: 600 }}>{x.name}</td>
+              <td>{kind(x.kind)}</td>
+              <td>{x.date}</td>
+              <td>
+                <span className={`tag ${x.urgent ? tone(x.days) : ''}`}>{when(x.days)}</span>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </section>
+  );
 }

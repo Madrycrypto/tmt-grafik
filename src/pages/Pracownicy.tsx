@@ -4,13 +4,14 @@ import { appUrl } from '../data/backend';
 import { toast } from '../toast';
 import { useMemo, useState } from 'react';
 import { uid } from '../domain/actions';
+import { deadlines } from '../domain/deadlines';
 import { plannedShift, absenceOn } from '../domain/coverage';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { BRIGADES, REASON_LABEL, TYPE_LABEL, canPair, linePatterns, patternBrigades } from '../domain/types';
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
-import { Icon, Sheet, TypeTag, LineOptions } from '../ui';
+import { DeadlinesCard, Icon, Sheet, TypeTag, LineOptions } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
 import { inviteWorkers, printBadges, printCards, revokeWorker, useAccounts } from './Invites';
@@ -160,6 +161,20 @@ function WorkerForm({
         <label className="field grow">
           {t('E-mail (login do aplikacji)')}
           <input type="email" value={w.email ?? ''} onChange={(e) => set('email', e.target.value)} placeholder="jan.kowalski@gmail.com" />
+        </label>
+      </div>
+      <div className="row">
+        <label className="field grow">
+          {t('Data zatrudnienia')}
+          <input type="date" value={w.hireDate ?? ''} onChange={(e) => set('hireDate', e.target.value || undefined)} />
+        </label>
+        <label className="field grow" title={t('Puste = umowa bezterminowa albo jeszcze nie wpisano. Przypomnimy z wyprzedzeniem.')}>
+          {t('Koniec umowy')}
+          <input type="date" value={w.contractEnd ?? ''} onChange={(e) => set('contractEnd', e.target.value || undefined)} />
+        </label>
+        <label className="field grow" title={t('Wpisz tylko datę ważności badania lekarskiego dopuszczającego do pracy, bez wyniku.')}>
+          {t('Badanie ważne do')}
+          <input type="date" value={w.medicalExpiry ?? ''} onChange={(e) => set('medicalExpiry', e.target.value || undefined)} />
         </label>
       </div>
       {w.homeStationId && stations.some((s) => canPair(state, w.homeStationId!, s.id)) && (
@@ -505,6 +520,7 @@ export default function Pracownicy() {
           )}
         </div>
       </div>
+      <DeadlinesCard items={deadlines(state, todayIso())} onOpen={(id) => { const w = state.workers.find((x) => x.id === id); if (w) setEditing(w); }} />
 
       <section className="card">
         <div className="row" style={{ marginBottom: 8 }}>
