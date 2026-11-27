@@ -8,6 +8,8 @@ import { Level, LevelPicker, LineSelect, TypeTag, useLine, usePersistent } from 
 import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
 import { useTraining } from '../data/training';
+import { missingCsv, missingRows } from '../domain/training';
+import { downloadCsv } from './WorkerBulk';
 
 export default function Matrix() {
   const { state, update, undo, canEdit, backend } = useApp();
@@ -126,6 +128,23 @@ export default function Matrix() {
               ))}
             </select>
           </label>
+          {docsOn && (
+            <button
+              type="button"
+              className="btn"
+              title={t('Lista osób ze stopniem w Matrixie bez dokumentu szkolenia (dla widocznych osób)')}
+              onClick={() => {
+                const rows = missingRows(people, records, (id) => state.lines.find((l) => l.id === id)?.name ?? id, (id) => state.stations.find((s) => s.id === id)?.name ?? id);
+                if (!rows.length) {
+                  toast(t('Wszystkie widoczne osoby mają komplet dokumentów.'));
+                  return;
+                }
+                downloadCsv(`braki-szkolen-${new Date().toISOString().slice(0, 10)}.csv`, missingCsv(rows));
+              }}
+            >
+              ⬇ {t('Braki dokumentów (CSV)')}
+            </button>
+          )}
           <label className="field">
             {t('Szukaj')}
             <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder={t('nazwisko')} />

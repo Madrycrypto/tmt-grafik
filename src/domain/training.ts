@@ -43,3 +43,26 @@ export function hasDoc(records: TrainingRecord[], workerId: string, stationId: s
 export function scanPath(workerId: string, recordId: string, ext: string): string {
   return `${workerId}/${recordId}.${ext.replace(/[^a-z0-9]/gi, '').toLowerCase() || 'jpg'}`;
 }
+
+export interface MissingRow {
+  worker: string;
+  line: string;
+  brigade: string;
+  station: string;
+  /** stopnie bez dokumentu, np. „2/4, 3/4” */
+  levels: string;
+}
+
+/** Lista „kto ma stopień w Matrixie bez dokumentu szkolenia” do przygotowania audytu. */
+export function missingRows(workers: Worker[], records: TrainingRecord[], lineName: (id: string) => string, stationName: (id: string) => string): MissingRow[] {
+  return workers.flatMap((w) =>
+    missingDocs(w, records).map((m) => ({ worker: w.name, line: lineName(w.lineId), brigade: w.brigade, station: stationName(m.stationId), levels: m.levels.map((l) => `${l}/4`).join(', ') })),
+  );
+}
+
+/** CSV z BOM i średnikami, żeby polski Excel otworzył go poprawnie. */
+export function missingCsv(rows: MissingRow[]): string {
+  const q = (s: string) => `"${s.replace(/"/g, '""')}"`;
+  const head = ['Pracownik', 'Linia', 'Brygada', 'Stanowisko', 'Brak dokumentu na stopień'].map(q).join(';');
+  return `﻿${[head, ...rows.map((r) => [r.worker, r.line, r.brigade, r.station, r.levels].map(q).join(';'))].join('\r\n')}\r\n`;
+}

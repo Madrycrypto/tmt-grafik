@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { demoState } from './seed';
-import { hasDoc, missingDocs, scanPath } from './training';
+import { hasDoc, missingCsv, missingDocs, missingRows, scanPath } from './training';
 import type { TrainingRecord } from './training';
 
 const rec = (workerId: string, stationId: string, level: number): TrainingRecord => ({
@@ -40,5 +40,16 @@ describe('szkolenia', () => {
   it('ścieżka skanu jest pod pracownikiem i ma bezpieczne rozszerzenie', () => {
     expect(scanPath('hv-a01', 'x1', 'JPG')).toBe('hv-a01/x1.jpg');
     expect(scanPath('hv-a01', 'x1', '../x')).toBe('hv-a01/x1.x');
+  });
+  it('lista braków dla wielu pracowników i CSV z cudzysłowami', () => {
+    const [a, b] = demoState().workers;
+    a.name = 'Jan "Z"';
+    a.skills = { s1: { level: 2 } };
+    b.skills = { s1: { level: 1 } };
+    const rows = missingRows([a, b], [rec(b.id, 's1', 1)], () => 'Linia', (id) => `St ${id}`);
+    expect(rows).toEqual([{ worker: 'Jan "Z"', line: 'Linia', brigade: a.brigade, station: 'St s1', levels: '1/4, 2/4' }]);
+    const csv = missingCsv(rows);
+    expect(csv.startsWith('\uFEFF"Pracownik";')).toBe(true);
+    expect(csv).toContain('"Jan ""Z""";"Linia"');
   });
 });
