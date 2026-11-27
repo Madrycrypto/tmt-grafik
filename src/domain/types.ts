@@ -13,6 +13,11 @@ export interface ShiftDef {
   /** godzina rozpoczęcia 0–23; zmiana należy do dnia, w którym się zaczyna */
   start: number;
   hours: number;
+  /**
+   * godziny należne bez pracy (np. skrócona nocka, bo linia stoi na maintenance):
+   * pracownik ich nie przepracowuje, ale liczą się do wymiaru i są płatne
+   */
+  credit?: number;
 }
 
 export interface Pattern {

@@ -85,7 +85,10 @@ export function patternShiftCodes(p: Pattern): string[] {
 export interface BrigadeSummary {
   brigade: BrigadeId;
   days: number;
+  /** godziny do wymiaru, w tym należne bez pracy */
   hours: number;
+  /** w tym należne bez pracy (postój) */
+  credit: number;
   target?: number;
   /** tygodnie (od poniedziałku) bez nieprzerwanych 35 h odpoczynku, z najdłuższą przerwą w godzinach */
   weeksWithoutRest: { week: string; rest: number }[];
@@ -122,11 +125,14 @@ export function summarize(state: AppState, patternId: string, month: string): Br
   return patternBrigades(pattern).map((brigade) => {
     const cells = brigadeMonth(state, patternId, brigade, month);
     let hours = 0;
+    let credit = 0;
     let n = 0;
     for (const c of cells) {
       if (c.status !== 'work') continue;
       n++;
-      hours += shiftDef(state, c.code)?.hours ?? 0;
+      const sd = shiftDef(state, c.code);
+      hours += (sd?.hours ?? 0) + (sd?.credit ?? 0);
+      credit += sd?.credit ?? 0;
     }
     // tygodnie poniedziałek–niedziela, które zaczynają się w tym miesiącu
     const weeksWithoutRest: { week: string; rest: number }[] = [];
@@ -138,7 +144,7 @@ export function summarize(state: AppState, patternId: string, month: string): Br
       const rest = longestRest(intervals, offset, offset + 168);
       if (rest < 35) weeksWithoutRest.push({ week: d, rest });
     }
-    return { brigade, days: n, hours, target: target?.days[brigade], weeksWithoutRest };
+    return { brigade, days: n, hours, credit, target: target?.days[brigade], weeksWithoutRest };
   });
 }
 

@@ -240,6 +240,7 @@ export default function Grafik() {
               <span key={c}>
                 <span className={`cell ${colorOf(c)}`}>{label(c)}</span>
                 {def ? fmtRange(def.start, def.hours) : c}
+                {def?.credit ? ` (+${def.credit} h ${t('należne, postój')})` : ''}
               </span>
             );
           })}
@@ -308,6 +309,17 @@ export default function Grafik() {
             {t('Dopełnij godziny')}
           </button>
         </div>
+        {(() => {
+          const per = rows.map(({ b }) => ({ n: membersOf(b), h: periodSummaries.reduce((x, p) => x + (p.rows.find((r) => r.brigade === b)?.credit ?? 0), 0) }));
+          const total = per.reduce((x, p) => x + p.h * p.n, 0);
+          const perPerson = Math.max(0, ...per.map((p) => p.h));
+          return perPerson > 0 ? (
+            <div className="note amber" style={{ marginBottom: 10 }}>
+              {t('Godziny należne bez pracy (postój na maintenance) w {p}: do {h} h na osobę', { p: span.length > 1 ? periodLabel(span) : month, h: perPerson })}
+              {total > 0 ? ` · ${t('razem dla tej grupy: {h} h do zapłaty', { h: total })}` : ` · ${t('dodaj ludzi do brygad, żeby policzyć sumę dla grupy')}`}
+            </div>
+          ) : null;
+        })()}
         <div className="row" style={{ alignItems: 'stretch' }}>
           {rows.map(({ b, cells }) => {
             const s = summary.find((x) => x.brigade === b)!;
@@ -363,6 +375,16 @@ export default function Grafik() {
                   {holidays > 0 && <> · {t('święta')} −{holidays} h</>}
                   {trimmed > 0 && <> · {t('cel dni')} −{trimmed} h</>}
                 </div>
+                {(() => {
+                  // godziny należne bez pracy w okresie (np. skrócona nocka na maintenance)
+                  const credit = periodSummaries.reduce((x, p) => x + (p.rows.find((r) => r.brigade === b)?.credit ?? 0), 0) || (span.length > 1 ? 0 : s.credit);
+                  return credit > 0 ? (
+                    <div className="d" title={t('Godziny, których pracownik nie przepracowuje (linia stoi), ale liczą się do wymiaru i są płatne')}>
+                      {t('w tym należne bez pracy: {h} h na osobę', { h: credit })}
+                      {n > 0 && <> · {t('razem {h} h', { h: credit * n })}</>}
+                    </div>
+                  ) : null;
+                })()}
                 {diff < 0 && n > 0 && (
                   <div className="d" style={{ color: 'var(--red-ink)' }}>
                     {t('razem do dopełnienia: {h} h (≈ {s} zmian na osobę)', { h: -diff * n, s: Math.ceil(-diff / 8) })}

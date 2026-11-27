@@ -886,4 +886,11 @@ export const zh: Record<string, string> = {
   '{s}: stanowisko specjalne ★': '{s}：特殊工位 ★',
   'Kliknij kółko, aby wybrać poziom (albo wpisz cyfrę 0–4). Pomarańczowe = poniżej minimum stanowiska. ★ = stanowisko specjalne.': '点击圆圈选择等级（或输入数字 0–4）。橙色 = 低于工位最低要求。★ = 特殊工位。',
   '3 zmiany lekkie + sobota popołudnie (4 brygady, maks. 3 nocki, pełny wymiar)': '轻型三班+周六中班（4个班组，每周最多3个夜班，满工时）',
+  'należne, postój': '应付，停机',
+  'Godziny, których pracownik nie przepracowuje (linia stoi), ale liczą się do wymiaru i są płatne': '员工未实际工作（产线停机）但计入标准工时并支付的小时',
+  'w tym należne bez pracy: {h} h na osobę': '其中停机应付：每人 {h} 小时',
+  'razem {h} h': '共 {h} 小时',
+  'Godziny należne bez pracy (postój na maintenance) w {p}: do {h} h na osobę': '{p} 停机维护应付工时：每人最多 {h} 小时',
+  'razem dla tej grupy: {h} h do zapłaty': '该组合计：{h} 小时需支付',
+  'dodaj ludzi do brygad, żeby policzyć sumę dla grupy': '向班组添加人员以计算该组总数',
 };

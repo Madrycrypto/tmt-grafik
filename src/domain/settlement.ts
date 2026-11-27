@@ -42,17 +42,20 @@ export function periodLabel(months: string[]): string {
 
 export interface MonthBalance {
   month: string;
-  /** godziny zaplanowane (z dodatkowymi zmianami) */
+  /** godziny zaplanowane (z dodatkowymi zmianami i należnymi bez pracy) */
   hours: number;
+  /** w tym należne bez pracy (postój) */
+  credit: number;
   /** wymiar pracownika: wymiar miesiąca minus godziny grafiku przypadające na urlop, L4 itp. */
   norm: number;
   diff: number;
 }
 
 /** Godziny pracownika względem jego wymiaru w każdym miesiącu okresu i łącznie. */
-export function workerPeriod(state: AppState, w: Worker, months: string[]): { months: MonthBalance[]; hours: number; norm: number; diff: number } {
+export function workerPeriod(state: AppState, w: Worker, months: string[]): { months: MonthBalance[]; hours: number; credit: number; norm: number; diff: number } {
   const out = months.map((month) => {
     let hours = 0;
+    let credit = 0;
     let excused = 0;
     for (const d of monthDays(month)) {
       if (absenceOn(state, w.id, d)) {
@@ -61,14 +64,17 @@ export function workerPeriod(state: AppState, w: Worker, months: string[]): { mo
         if (s) excused += s.end - s.start;
         continue;
       }
-      hours += dayEntry(state, w, d).hours;
+      const e = dayEntry(state, w, d);
+      hours += e.hours + e.credit;
+      credit += e.credit;
     }
     const norm = Math.max(0, monthNorm(month).hours - excused);
-    return { month, hours, norm, diff: hours - norm };
+    return { month, hours, credit, norm, diff: hours - norm };
   });
   const hours = out.reduce((s, m) => s + m.hours, 0);
   const norm = out.reduce((s, m) => s + m.norm, 0);
-  return { months: out, hours, norm, diff: hours - norm };
+  const credit = out.reduce((s, m) => s + m.credit, 0);
+  return { months: out, hours, credit, norm, diff: hours - norm };
 }
 
 export function workerPattern(state: AppState, w: Worker): Pattern | undefined {

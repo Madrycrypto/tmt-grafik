@@ -154,7 +154,7 @@ tr.gap-row { background: var(--red-soft); }
 button.cell { cursor: pointer; }
 .c-R8, .c-R12 { background: #fff1c2; color: #5a4300; }
 .c-P8 { background: #ffd9a8; color: #5c3300; }
-.c-N8, .c-N12 { background: #2b3445; color: #fff; }
+.c-N8, .c-N12, [class*='c-N'] { background: #2b3445; color: #fff; }
 .c-D8 { background: #ffe39a; color: #5a4300; }
 .c-D12 { background: #ffe39a; color: #5a4300; }
 .c-W { background: var(--line-soft); color: var(--muted); }
@@ -320,7 +320,7 @@ button.cell { cursor: pointer; }
 }
 :root[data-theme='dark'] .c-R8, :root[data-theme='dark'] .c-R12, :root[data-theme='dark'] .c-D8, :root[data-theme='dark'] .c-D12 { background: #4a3f16; color: #ffe39a; }
 :root[data-theme='dark'] .c-P8 { background: #4d3219; color: #ffc98a; }
-:root[data-theme='dark'] .c-N8, :root[data-theme='dark'] .c-N12 { background: #3a4a6a; color: #fff; }
+:root[data-theme='dark'] .c-N8, :root[data-theme='dark'] .c-N12, :root[data-theme='dark'] [class*='c-N'] { background: #3a4a6a; color: #fff; }
 :root[data-theme='dark'] .btn.primary, :root[data-theme='dark'] .step .n { color: #0b0e14; }
 :root[data-theme='dark'] .overlay { background: rgba(0, 0, 0, 0.6); }
 /* kody QR zawsze na białym tle — inaczej telefon ich nie odczyta */

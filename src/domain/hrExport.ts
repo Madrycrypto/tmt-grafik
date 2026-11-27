@@ -18,6 +18,8 @@ export interface DayEntry {
   start?: number;
   end?: number;
   hours: number;
+  /** godziny należne bez pracy (postój) — do wymiaru, nie do przepracowanych */
+  credit: number;
   night: number;
   sunday: number;
   extra: boolean;
@@ -40,8 +42,9 @@ function overlap(a: number, b: number, c: number, d: number): number {
 export function dayEntry(state: AppState, w: Worker, date: string): DayEntry {
   const ab = absenceOn(state, w.id, date);
   const shift = plannedShift(state, w, date);
-  if (ab) return { date, code: ab.reason, hours: 0, night: 0, sunday: 0, extra: false, absence: ab.reason };
-  if (!shift) return { date, code: holidayName(date) ? 'ŚW' : 'W', hours: 0, night: 0, sunday: 0, extra: false };
+  if (ab) return { date, code: ab.reason, hours: 0, credit: 0, night: 0, sunday: 0, extra: false, absence: ab.reason };
+  if (!shift) return { date, code: holidayName(date) ? 'ŚW' : 'W', hours: 0, credit: 0, night: 0, sunday: 0, extra: false };
+  const credit = shift.extra || !shift.code ? 0 : (state.shiftDefs.find((d) => d.code === shift.code)?.credit ?? 0);
   const { start, end } = shift;
   const night = NIGHT.reduce((s, [a, b]) => s + overlap(start, end, a, b), 0);
   const sunday = (weekday(date) === 0 ? overlap(start, end, 0, 24) : 0) + (weekday(addDays(date, 1)) === 0 ? overlap(start, end, 24, 48) : 0);
@@ -53,6 +56,7 @@ export function dayEntry(state: AppState, w: Worker, date: string): DayEntry {
     start,
     end,
     hours: end - start,
+    credit,
     night,
     sunday,
     extra: shift.extra,
@@ -86,6 +90,8 @@ export interface HrSummary {
   byStation: Record<string, number>;
   /** godziny na stanowiskach specjalnych (★) */
   specialHours: number;
+  /** godziny należne bez pracy (postój, np. maintenance) */
+  credit: number;
 }
 
 export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
@@ -113,6 +119,7 @@ export function hrSummary(state: AppState, f: HrFilter): HrSummary[] {
       extraHours: days.filter((d) => d.extra).reduce((s, d) => s + d.hours, 0),
       absences,
       byStation,
+      credit: days.reduce((h, d) => h + d.credit, 0),
       specialHours: Object.entries(byStation).reduce((h, [id, v]) => h + (state.stations.find((x) => x.id === id)?.special ? v : 0), 0),
     };
   });
@@ -147,6 +154,7 @@ export function hrMonthlyCsv(state: AppState, f: HrFilter): string {
     'w tym niedziela',
     'w tym dodatkowe',
     'w tym na stanowiskach ★',
+    'Należne bez pracy (postój)',
     'L4 (dni)',
     'Urlop (dni)',
     'Inne nieob. (dni)',
@@ -165,6 +173,7 @@ export function hrMonthlyCsv(state: AppState, f: HrFilter): string {
     s.sunday,
     s.extraHours,
     Math.round(s.specialHours * 100) / 100,
+    s.credit,
     s.absences.L4 ?? 0,
     s.absences.UW ?? 0,
     (s.absences.NN ?? 0) + (s.absences.INNE ?? 0),

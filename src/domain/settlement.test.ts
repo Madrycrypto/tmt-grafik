@@ -65,3 +65,33 @@ describe('stanowiska specjalne ★', () => {
     expect(hrMonthlyCsv(s, f)).toContain('w tym na stanowiskach ★');
   });
 });
+
+describe('godziny należne bez pracy (skrócona nocka na maintenance)', () => {
+  it('zmiana 23–04 z 3 h należnymi: 5 h przepracowane, 8 h do wymiaru, bez braku w bilansie', async () => {
+    const { dayEntry, hrSummary } = await import('./hrExport');
+    const { summarize } = await import('./rota');
+    const s0 = demoState();
+    const months = ['2027-02'];
+    const before = workerPeriod(s0, s0.workers[0], months);
+    // nowy obiekt stanu, tak jak w aplikacji po każdej zmianie (grafik jest buforowany per stan)
+    const day = monthDays('2027-02').find((d) => plannedShift(s0, s0.workers[0], d))!;
+    const code = plannedShift(s0, s0.workers[0], day)!.code!;
+    const s = structuredClone(s0);
+    const w = s.workers[0];
+    const p = s.patterns.find((x) => x.id === w.patternId)!;
+    const base = s.shiftDefs.find((d) => d.code === code)!;
+    const short = { code: 'SHORT', label: base.label, start: base.start, hours: base.hours - 3, credit: 3 };
+    s.shiftDefs.push(short);
+    p.sequence = p.sequence.map((c) => (c === code ? 'SHORT' : c));
+    const brigBefore = summarize(s0, p.id, '2027-02');
+    const after = workerPeriod(s, w, months);
+    expect(after.credit).toBeGreaterThan(0);
+    expect(after.diff).toBe(before.diff);
+    const shortDay = monthDays('2027-02').find((d) => dayEntry(s, w, d).credit > 0)!;
+    expect(dayEntry(s, w, shortDay).hours).toBe(base.hours - 3);
+    expect(hrSummary(s, { month: '2027-02', lineId: 'all', who: 'all', includeInactive: false }).find((r) => r.worker.id === w.id)!.credit).toBe(after.credit);
+    const brig = summarize(s, p.id, '2027-02');
+    expect(brig.map((x) => x.hours)).toEqual(brigBefore.map((x) => x.hours));
+    expect(brig.some((x) => x.credit > 0)).toBe(true);
+  });
+});
