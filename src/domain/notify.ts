@@ -14,6 +14,8 @@ interface DayInfo {
   key: string;
   shift?: { start: number; end: number };
   station?: string | null;
+  lineId?: string;
+  extra?: boolean;
   also?: string[];
   absence?: string;
 }
@@ -25,16 +27,19 @@ function dayInfo(state: AppState, w: Worker, date: string): DayInfo {
   if (!s) return { key: 'W' };
   const pl = placement(state, w, date);
   const st = pl.stationId;
-  return { key: `${s.start}-${s.end}@${[st ?? '', ...pl.also].join('+')}`, shift: { start: s.start, end: s.end }, station: st, also: pl.also };
+  return { key: `${s.start}-${s.end}@${pl.lineId}:${[st ?? '', ...pl.also].join('+')}`, shift: { start: s.start, end: s.end }, station: st, lineId: pl.lineId, extra: s.extra, also: pl.also };
 }
 
-function describe(l: Lang, state: AppState, d: DayInfo): string {
+function describe(l: Lang, state: AppState, d: DayInfo, w: Worker): string {
   if (d.absence) return tl(l, d.absence === 'UW' ? 'Urlop' : d.absence === 'L4' ? 'L4' : 'Inne');
   if (!d.shift) return tl(l, 'wolne');
   const range = `${fmtHour(d.shift.start).slice(0, 2)}–${fmtHour(d.shift.end).slice(0, 2)}`;
   const name = (id: string) => state.stations.find((x) => x.id === id)?.name ?? '?';
   const st = d.station ? [d.station, ...(d.also ?? [])].map(name).join(' + ') : undefined;
-  return st ? `${range} ${st}` : range;
+  // na innej linii niż własna pracownik musi wiedzieć, dokąd idzie
+  const line = d.lineId && d.lineId !== w.lineId ? `${state.lines.find((x) => x.id === d.lineId)?.name ?? ''}: ` : '';
+  const extra = d.extra ? ` (${tl(l, 'dodatkowa zmiana')})` : '';
+  return `${range} ${line}${st ?? ''}${extra}`.replace(/\s+/g, ' ').trim();
 }
 
 function dayLabel(l: Lang, date: string): string {
@@ -60,7 +65,7 @@ export function scheduleNotices(prev: AppState, next: AppState, from: string, da
     }
     if (!changes.length) continue;
     const msg = (l: Lang) => {
-      const lines = changes.slice(0, 4).map((c) => `${dayLabel(l, c.date)}: ${describe(l, prev, c.before)} → ${describe(l, next, c.after)}`);
+      const lines = changes.slice(0, 4).map((c) => `${dayLabel(l, c.date)}: ${describe(l, prev, c.before, old)} → ${describe(l, next, c.after, w)}`);
       if (changes.length > 4) lines.push(tl(l, 'i jeszcze {n} zmian', { n: changes.length - 4 }));
       return { title: tl(l, 'Zmiana grafiku'), body: lines.join('\n') };
     };

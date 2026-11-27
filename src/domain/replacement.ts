@@ -21,6 +21,8 @@ export interface Step {
   /** dla combine: stanowiska, które pracownik już obsługuje razem z głównym */
   keepAlso?: string[];
   extraShift?: { start: number; hours: number };
+  /** ile godzin brakuje pracownikowi do wymiaru w okresie rozliczeniowym (dla dodatkowej zmiany) */
+  missing?: number;
   warnings: string[];
 }
 
@@ -31,6 +33,8 @@ export interface Variant {
   extras: number;
   otherLine: boolean;
   agency: boolean;
+  /** każda dodatkowa zmiana dopełnia komuś niedomiar, więc nie są to nadgodziny */
+  fillsDeficit: boolean;
 }
 
 export interface GapRequest {
@@ -41,6 +45,8 @@ export interface GapRequest {
   window: Interval;
   /** pracownicy, których nie wolno użyć (np. nieobecny) */
   excludeIds: string[];
+  /** brakujące godziny do wymiaru wg pracownika; kto je ma, dostaje dodatkową zmianę przed nadgodzinami */
+  missing?: Record<string, number>;
 }
 
 export interface Blocked {
@@ -54,7 +60,8 @@ const MAX_DEPTH = 3;
 const MAX_VARIANTS = 3;
 
 function stepCost(s: Step): number {
-  const base = { reserve: 0, surplus: 1, combine: 2, move: 3, extra: s.worker.type === 'AG' ? 25 : 20 }[s.kind];
+  // dodatkowa zmiana na niedomiar to nie nadgodziny: taniej niż agencja i nadgodziny, drożej niż ruchy w obrębie zmiany
+  const base = { reserve: 0, surplus: 1, combine: 2, move: 3, extra: s.missing ? 10 : s.worker.type === 'AG' ? 25 : 20 }[s.kind];
   const otherLine = s.fromLineId !== s.toLineId ? 4 : 0;
   return base + otherLine - s.level * 0.25;
 }
@@ -181,6 +188,7 @@ function fill(ctx: Ctx, stationId: string, lineId: string, window: Interval, use
         level: level(w, stationId),
         shiftDate: addDays(ctx.req.date, shift),
         extraShift: { start: window.start - shift * 24, hours },
+        missing: ctx.req.missing?.[w.id],
         warnings,
       },
     ]);
@@ -208,6 +216,7 @@ export function findVariants(state: AppState, req: GapRequest): { variants: Vari
       extras: steps.filter((s) => s.kind === 'extra').length,
       otherLine: steps.some((s) => s.fromLineId !== s.toLineId),
       agency: steps.some((s) => s.kind === 'extra' && s.worker.type === 'AG'),
+      fillsDeficit: steps.some((s) => s.kind === 'extra') && steps.filter((s) => s.kind === 'extra').every((s) => (s.missing ?? 0) > 0),
     }))
     .sort((a, b) => a.score - b.score);
 

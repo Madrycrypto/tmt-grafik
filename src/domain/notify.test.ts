@@ -84,3 +84,44 @@ describe('mieszane 8 h i 12 h', () => {
     expect(plannedShift(s, w, day)!.end - plannedShift(s, w, day)!.start).toBe(12);
   });
 });
+
+describe('dodatkowa zmiana na innej linii', () => {
+  it('powiadomienie podaje linię i że to dodatkowa zmiana', () => {
+    const prev = demoState();
+    prev.workers.forEach((w, i) => (w.email = `w${i}@x.pl`));
+    const next = structuredClone(prev);
+    const w = next.workers.find((x) => x.active)!;
+    const other = next.lines.find((l) => l.id !== w.lineId)!;
+    const st = next.stations.find((s) => s.lineId === other.id)!;
+    const day = monthDays('2026-12').find((d) => rotaCell(next, w.patternId, w.brigade, d).status !== 'work')!;
+    setAssignment(next, { date: day, workerId: w.id, lineId: other.id, stationId: st.id, extraShift: { start: 7, hours: 8 }, source: 'manual' });
+    const n = scheduleNotices(prev, next, '2026-12-01').find((x) => x.workerId === w.id)!;
+    expect(n.pl.body).toContain(`${other.name}: ${st.name}`);
+    expect(n.pl.body).toContain('dodatkowa zmiana');
+  });
+});
+
+describe('zastępstwo: niedomiar godzin', () => {
+  const gap = () => {
+    const s = demoState();
+    const st = lineStatus(s, 'hvac1', '2026-12-02', { start: 7, end: 15 });
+    const g = st.statuses.find((x) => x.people.length && x.station.name === 'Lutowanie')!;
+    return { s, g, absent: g.people[0] };
+  };
+  it('osoba z niedomiarem dostaje dodatkową zmianę przed nadgodzinami i jest oznaczona', () => {
+    const { s, g, absent } = gap();
+    const req = { date: absent.shift.date, lineId: 'hvac1', stationId: g.station.id, window: absent.rel, excludeIds: [absent.worker.id] };
+    const extras = (m?: Record<string, number>) => findVariants(s, { ...req, missing: m }).variants.flatMap((v) => v.steps).filter((x) => x.kind === 'extra');
+    const base = extras();
+    expect(base.length).toBeGreaterThan(0);
+    const all = Object.fromEntries(s.workers.map((w) => [w.id, 16]));
+    const withDef = findVariants(s, { ...req, missing: all });
+    const ex = withDef.variants.filter((v) => v.steps.some((x) => x.kind === 'extra'));
+    expect(ex.length).toBeGreaterThan(0);
+    for (const v of ex) {
+      expect(v.fillsDeficit).toBe(true);
+      expect(v.steps.filter((x) => x.kind === 'extra').every((x) => x.missing === 16)).toBe(true);
+    }
+    expect(findVariants(s, req).variants.every((v) => !v.fillsDeficit)).toBe(true);
+  });
+});

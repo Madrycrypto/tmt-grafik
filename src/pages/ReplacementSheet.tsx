@@ -4,6 +4,7 @@ import { addAbsence, applyVariant, describeStep, lineName, setAssignment, statio
 import { level, plannedShift, roster } from '../domain/coverage';
 import type { Interval } from '../domain/coverage';
 import { fmtDate, fmtRange } from '../domain/dates';
+import { deficits } from '../domain/fill';
 import { findVariants, restCheck } from '../domain/replacement';
 import type { Variant } from '../domain/replacement';
 import type { AbsenceReason, Worker } from '../domain/types';
@@ -25,29 +26,32 @@ const KIND_LABEL = { reserve: 'z rezerwy', surplus: 'z nadwyżki', combine: 'ł�
 
 function badge(v: Variant): string {
   const parts = [t(v.moves === 1 ? '{n} ruch' : '{n} ruchy', { n: v.moves })];
-  if (v.extras) parts.push(t(v.agency ? 'agencja' : 'nadgodziny'));
+  if (v.extras) parts.push(t(v.fillsDeficit ? 'dopełnia niedomiar godzin' : v.agency ? 'agencja' : 'nadgodziny'));
   else parts.push(t('bez nadgodzin'));
   if (v.otherLine) parts.push(t('inna linia'));
   return parts.join(' · ');
 }
 
 export default function ReplacementSheet({ target, onClose }: { target: SheetTarget; onClose: () => void }) {
-  const { state, update, user, undo } = useApp();
+  const { state, update, user, undo, backend } = useApp();
   const [reason, setReason] = useState<AbsenceReason>('L4');
   const [picked, setPicked] = useState(0);
   const [manual, setManual] = useState('');
   const station = state.stations.find((s) => s.id === target.stationId);
 
+  // niedomiar godzin (okres rozliczeniowy dnia luki): takim osobom najpierw proponujemy dodatkową zmianę
+  const missing = useMemo(() => Object.fromEntries(deficits(state, target.date.slice(0, 7)).map((d) => [d.worker.id, d.missing])), [state, target.date]);
   const { variants, blocked } = useMemo(
     () =>
       findVariants(state, {
+        missing,
         date: target.date,
         lineId: target.lineId,
         stationId: target.stationId,
         window: target.window,
         excludeIds: target.absent ? [target.absent.id] : [],
       }),
-    [state, target],
+    [state, target, missing],
   );
 
   const manualOptions = useMemo(() => {
@@ -71,7 +75,20 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
     const v = variants[picked];
     if (!v) return;
     update((d) => applyVariant(d, user, v, absentInfo));
+    notifyToast(v.steps.map((s) => s.worker));
     onClose();
+  };
+
+  /** Zmiana grafiku idzie do pracownika sama ok. 10 s po zatwierdzeniu (Cofnij ją wstrzymuje); tu mówimy komu i kto aplikacji nie ma. */
+  const notifyToast = (ws: Worker[]) => {
+    if (!backend.client) return;
+    const uniq = [...new Map(ws.map((w) => [w.id, w])).values()];
+    const noApp = uniq.filter((w) => !w.email);
+    const msg = [
+      uniq.length > noApp.length ? t('Powiadomienie o zmianie dostanie: {n} (za ok. 10 s; Cofnij je wstrzymuje)', { n: uniq.filter((w) => w.email).map((w) => w.name).join(', ') }) : '',
+      noApp.length ? t('Bez aplikacji — powiedz osobiście: {n}', { n: noApp.map((w) => w.name).join(', ') }) : '',
+    ].filter(Boolean).join('. ');
+    toast(msg, { undo, tone: noApp.length ? 'warn' : 'ok', ms: 9000 });
   };
 
   const onlyAbsence = () => {
@@ -104,6 +121,7 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
       `${target.absent ? `Brak: ${target.absent.name} (${reason}). ` : ''}Ręcznie: ${opt.w.name} → ${station.name} (${lineName(state, target.lineId)})`,
     );
     toast(warn.length ? t('Przypisano mimo uwag: {w}', { w: warn.join('; ') }) : t('Przypisano'), { undo, tone: warn.length ? 'warn' : 'ok' });
+    notifyToast([opt.w]);
     onClose();
   };
 
@@ -144,6 +162,7 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
                 <span className="sub">
                   {t(KIND_LABEL[s.kind])} · {t('Poziom')} {s.level}
                   {s.extraShift && ` · ${fmtRange(s.extraShift.start, s.extraShift.hours)}`}
+                  {s.missing ? ` · ${t('brakuje mu {h} h do wymiaru', { h: s.missing })}` : ''}
                   {s.warnings.map((w) => ` · ⚠ ${w}`).join('')}
                 </span>
               </span>
@@ -179,7 +198,7 @@ export default function ReplacementSheet({ target, onClose }: { target: SheetTar
               <option value="">{t('— wybierz —')}</option>
               {manualOptions.map(({ w, e, rest, lv }) => (
                 <option key={w.id} value={w.id}>
-                  {`${t('poz.')} ${lv} · ${w.name} · ${e ? `${t('na zmianie')} (${t(stationName(state, e.stationId))})` : plannedShift(state, w, target.date) ? t('inna zmiana') : t('wolne')}${rest && !rest.ok ? ` · ${t('brak 11 h')}` : ''}`}
+                  {`${t('poz.')} ${lv} · ${w.name}${missing[w.id] ? ` (${t('brakuje {h} h', { h: missing[w.id] })})` : ''} · ${e ? `${t('na zmianie')} (${t(stationName(state, e.stationId))})` : plannedShift(state, w, target.date) ? t('inna zmiana') : t('wolne')}${rest && !rest.ok ? ` · ${t('brak 11 h')}` : ''}`}
                 </option>
               ))}
             </select>

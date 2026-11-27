@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react';
+import { toast } from '../toast';
 import { useApp } from '../data/AppContext';
 import { setAssignment, stationName } from '../domain/actions';
 import { fmtDate, fmtRange, todayIso } from '../domain/dates';
@@ -9,7 +10,7 @@ import { t } from '../i18n';
 
 /** Propozycje dodatkowych zmian dla ludzi z niedoborem godzin (na liniach, gdzie są luki). */
 export default function FillSheet({ month, workers, onClose }: { month: string; workers: Worker[]; onClose: () => void }) {
-  const { state, update } = useApp();
+  const { state, update, undo, backend } = useApp();
   const today = todayIso();
   const { deficits, proposals } = useMemo(
     () => fillProposals(state, month, { workers, from: today }),
@@ -29,6 +30,15 @@ export default function FillSheet({ month, workers, onClose }: { month: string; 
       },
       `Dopełnienie godzin (${month}): ` + chosen.map((p) => `${p.worker.name} ${p.date} ${lineName(p.lineId)}/${stationName(state, p.stationId)}`).join('; '),
     );
+    if (backend.client) {
+      const ws = [...new Map(chosen.map((p) => [p.worker.id, p.worker])).values()];
+      const noApp = ws.filter((w) => !w.email);
+      const msg = [
+        ws.length > noApp.length ? t('Powiadomienie o zmianie dostanie: {n} (za ok. 10 s; Cofnij je wstrzymuje)', { n: ws.filter((w) => w.email).map((w) => w.name).join(', ') }) : '',
+        noApp.length ? t('Bez aplikacji — powiedz osobiście: {n}', { n: noApp.map((w) => w.name).join(', ') }) : '',
+      ].filter(Boolean).join('. ');
+      toast(msg, { undo, tone: noApp.length ? 'warn' : 'ok', ms: 9000 });
+    }
     onClose();
   };
 

@@ -173,6 +173,10 @@ export const zh: Record<string, string> = {
   'Przypisz do': '分配到',
   'Pokrycie w kolejnych godzinach': '各小时覆盖情况',
   'dodatkowa zmiana': '加班',
+  'dopełnia niedomiar godzin': '补足缺少的工时',
+  'brakuje mu {h} h do wymiaru': '距标准工时还差 {h} 小时',
+  'Powiadomienie o zmianie dostanie: {n} (za ok. 10 s; Cofnij je wstrzymuje)': '将通知：{n}（约 10 秒后发送；撤销可阻止）',
+  'Bez aplikacji — powiedz osobiście: {n}': '没有应用——请当面告知：{n}',
   przesunięty: '已调岗',
   'Najpierw dodaj linię i stanowiska w zakładce „Linie i stanowiska”.': '请先在“产线与工位”中添加产线和工位。',
 
