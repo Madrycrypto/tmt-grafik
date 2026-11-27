@@ -6,7 +6,7 @@ import { downloadXlsx } from './WorkerBulk';
 import type { AttendanceRow } from '../domain/stats';
 import { useApp } from '../data/AppContext';
 import { usePunches } from '../data/punches';
-import { LineOptions, usePersistent } from '../ui';
+import { LineOptions, usePersistent, useScope } from '../ui';
 import { t } from '../i18n';
 
 const pct = (x: number) => `${(x * 100).toFixed(1).replace('.', ',')}%`;
@@ -17,7 +17,7 @@ const REASONS = ['L4', 'UW', 'NN', 'INNE'] as const;
 export default function Statystyki() {
   const { state } = useApp();
   const [month, setMonth] = usePersistent('stat-month', todayIso().slice(0, 7));
-  const [scope, setScope] = usePersistent('stat-line', 'all');
+  const [scope, setScope] = useScope(state);
   const lines = useMemo(() => {
     const ls = scope === 'all' ? state.lines : scope.startsWith('g:') ? state.lines.filter((l) => l.group === scope.slice(2)) : state.lines.filter((l) => l.id === scope);
     return ls.map((l) => l.id);

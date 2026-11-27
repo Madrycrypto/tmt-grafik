@@ -11,7 +11,7 @@ import { BRIGADES, REASON_LABEL, TYPE_LABEL, canPair, linePatterns, patternBriga
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
-import { DeadlinesCard, Icon, Sheet, TypeTag, LineOptions } from '../ui';
+import { DeadlinesCard, Icon, Sheet, TypeTag, LineOptions, scopeLineIds, useScope } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
 import { inviteWorkers, printBadges, printCards, revokeWorker, useAccounts } from './Invites';
@@ -390,7 +390,7 @@ export default function Pracownicy() {
   const { state, update } = useApp();
   const [editing, setEditing] = useState<Worker | null>(null);
   const [query, setQuery] = useState('');
-  const [line, setLine] = useState('all');
+  const [line, setLine] = useScope(state);
   const [type, setType] = useState('all');
   const [brig, setBrig] = useState('all');
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -445,7 +445,7 @@ export default function Pracownicy() {
   const list = useMemo(
     () =>
       state.workers
-        .filter((w) => (line === 'all' || w.lineId === line) && (type === 'all' || w.type === type) && (brig === 'all' || w.brigade === brig))
+        .filter((w) => (line === 'all' || scopeLineIds(state, line).includes(w.lineId)) && (type === 'all' || w.type === type) && (brig === 'all' || w.brigade === brig))
         .filter((w) => !query || w.name.toLowerCase().includes(query.toLowerCase()))
         .sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)),
     [state, query, line, type, brig],
@@ -484,7 +484,7 @@ export default function Pracownicy() {
             type="button"
             className="btn primary"
             disabled={!state.lines.length}
-            onClick={() => setEditing(newWorkerFor(state, line !== 'all' ? line : state.lines[0].id))}
+            onClick={() => setEditing(newWorkerFor(state, scopeLineIds(state, line)[0] ?? state.lines[0].id))}
           >
             <span style={{ width: 18, height: 18, display: 'inline-flex' }}>
               <Icon name="plus" />
@@ -532,6 +532,11 @@ export default function Pracownicy() {
             {t('Linia')}
             <select value={line} onChange={(e) => setLine(e.target.value)}>
               <option value="all">{t('wszystkie')}</option>
+              {[...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))].map((g) => (
+                <option key={g} value={`g:${g}`}>
+                  {g} — {t('cała linia główna')}
+                </option>
+              ))}
               <LineOptions state={state} />
             </select>
           </label>

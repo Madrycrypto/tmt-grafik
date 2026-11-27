@@ -282,10 +282,38 @@ export function LineOptions({ state }: { state: AppState }) {
   );
 }
 
+/** Zakres linii wspólny dla wszystkich zakładek: 'all', 'g:<linia główna>' albo id linii. Zapamiętany między zakładkami. */
+export function useScope(state: AppState): [string, (v: string) => void] {
+  const [raw, setRaw] = usePersistent('scope', 'all');
+  const ok = raw === 'all' || (raw.startsWith('g:') ? state.lines.some((l) => l.group === raw.slice(2)) : state.lines.some((l) => l.id === raw));
+  return [ok ? raw : 'all', setRaw];
+}
+
+/** Linie należące do zakresu. */
+export function scopeLineIds(state: AppState, scope: string): string[] {
+  const ls = scope === 'all' ? state.lines : scope.startsWith('g:') ? state.lines.filter((l) => l.group === scope.slice(2)) : state.lines.filter((l) => l.id === scope);
+  return ls.map((l) => l.id);
+}
+
+/** Wybór jednej linii (Obsada, Matrix) zgodny ze wspólnym zakresem: przy grupie zostaje własna linia, jeśli do niej należy. */
 export function useLine(state: AppState): [string, (v: string) => void] {
-  const [lineId, setLineId] = usePersistent('line', state.lines[0]?.id ?? '');
-  const valid = state.lines.some((l) => l.id === lineId) ? lineId : (state.lines[0]?.id ?? '');
-  return [valid, setLineId];
+  const [scope, setScope] = useScope(state);
+  const [own, setOwn] = usePersistent('line', state.lines[0]?.id ?? '');
+  const first = state.lines[0]?.id ?? '';
+  const ownValid = state.lines.some((l) => l.id === own) ? own : first;
+  let line = ownValid;
+  if (scope !== 'all' && !scope.startsWith('g:')) line = scope;
+  else if (scope.startsWith('g:')) {
+    const inGroup = scopeLineIds(state, scope);
+    if (!inGroup.includes(ownValid)) line = inGroup[0] ?? ownValid;
+  }
+  return [
+    line,
+    (v: string) => {
+      setOwn(v);
+      setScope(v);
+    },
+  ];
 }
 
 /** Lista umów i badań lekarskich, które się kończą lub już minęły; w trybie compact tylko baner z odnośnikiem. */

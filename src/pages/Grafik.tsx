@@ -8,7 +8,7 @@ import { OFF, holidaysOff, patternBrigades } from '../domain/types';
 import type { BrigadeId, Exclusion, Pattern } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
-import { LineOptions, usePersistent } from '../ui';
+import { LineOptions, usePersistent, useScope } from '../ui';
 import { monthNorm } from '../domain/norm';
 import { patternPeriod, periodLabel, periodMonths, SETTLEMENT_OPTIONS } from '../domain/settlement';
 import { BRIGADE_COLOR, buildPrintWorkbook, printFileName } from '../domain/printExport';
@@ -21,7 +21,7 @@ import { t } from '../i18n';
 export default function Grafik() {
   const { state, update, undo } = useApp();
   const [month, setMonth] = useState(todayIso().slice(0, 7));
-  const [scope, setScope] = usePersistent('grafik-line', 'all');
+  const [scope, setScope] = useScope(state);
   // zakres: 'all', 'g:<grupa>' (linia główna, np. CFM) albo id linii
   const scopeLines = scope === 'all' ? state.lines : scope.startsWith('g:') ? state.lines.filter((l) => l.group === scope.slice(2)) : state.lines.filter((l) => l.id === scope);
   const scopePatterns = state.patterns.filter((p) => scope === 'all' || scopeLines.some((l) => !l.patternIds?.length || l.patternIds.includes(p.id)));

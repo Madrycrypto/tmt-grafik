@@ -5,7 +5,7 @@ import { toast } from '../toast';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { checkDay, DIR_LABEL, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { DayCheck, Punch } from '../domain/punches';
-import { LineOptions, TypeTag } from '../ui';
+import { LineOptions, TypeTag, scopeLineIds, useScope } from '../ui';
 import { WorkerEditor } from './Pracownicy';
 import TnaImport from './TnaImport';
 import TnaLive, { TnaBadge, useTna } from './TnaLive';
@@ -56,7 +56,7 @@ function AddPunch({ row, onAdd }: { row: DayCheck; onAdd: (dir: 'in' | 'out', hh
 export default function Rcp() {
   const { state, backend, update, canEdit } = useApp();
   const [date, setDate] = useState(todayIso());
-  const [lineId, setLineId] = useState('all');
+  const [lineId, setLineId] = useScope(state);
   const [onlyProblems, setOnlyProblems] = useState(false);
   const [openWorker, setOpenWorker] = useState<string | null>(null);
   const [tna, setTna] = useState(false);
@@ -68,7 +68,7 @@ export default function Rcp() {
   const rows = useMemo(
     () =>
       state.workers
-        .filter((w) => w.active && (lineId === 'all' || w.lineId === lineId))
+        .filter((w) => w.active && (lineId === 'all' || scopeLineIds(state, lineId).includes(w.lineId)))
         .map((w) => checkDay(state, w, date, punches, nowH))
         .filter((r) => r.status !== 'off')
         .sort((a, b) => (a.plan?.start ?? 99) - (b.plan?.start ?? 99) || a.worker.name.localeCompare(b.worker.name, 'pl')),
@@ -152,6 +152,11 @@ export default function Rcp() {
             {t('Linia')}
             <select value={lineId} onChange={(e) => setLineId(e.target.value)}>
               <option value="all">{t('wszystkie')}</option>
+              {[...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))].map((g) => (
+                <option key={g} value={`g:${g}`}>
+                  {g} — {t('cała linia główna')}
+                </option>
+              ))}
               <LineOptions state={state} />
             </select>
           </label>

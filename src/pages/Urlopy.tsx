@@ -6,7 +6,7 @@ import { hasLeave, leaveBalance, leaveLoad, parseLeaveSheet, setLeaveDay } from 
 import { plannedShift } from '../domain/coverage';
 import { shiftDef } from '../domain/rota';
 import { useApp } from '../data/AppContext';
-import { LineOptions, usePersistent } from '../ui';
+import { LineOptions, usePersistent, useScope } from '../ui';
 import { t } from '../i18n';
 
 const DOW = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So'];
@@ -14,7 +14,7 @@ const DOW = ['Nd', 'Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So'];
 export default function Urlopy() {
   const { state, update, canEdit } = useApp();
   const [month, setMonth] = usePersistent('urlopy-month', todayIso().slice(0, 7));
-  const [scope, setScope] = usePersistent('urlopy-line', 'all');
+  const [scope, setScope] = useScope(state);
   const [maxOff, setMaxOff] = usePersistent('urlopy-max', '');
   const [paste, setPaste] = useState<string | null>(null);
   const days = monthDays(month);
