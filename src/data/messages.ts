@@ -75,8 +75,11 @@ export async function sendMessage(
   return data as SendResult;
 }
 
+/** Potwierdzenie odbioru: funkcja zapisuje je i powiadamia autora; bez niej zapis idzie bezpośrednio (autor zobaczy je w aplikacji). */
 export async function markRead(client: SupabaseClient, workerId: string, ids: string[]): Promise<void> {
   if (!ids.length) return;
+  const { data, error } = await client.functions.invoke('tmt-ack', { body: { ids } });
+  if (!error && !data?.error) return;
   await client.from('message_reads').upsert(
     ids.map((message_id) => ({ message_id, worker_id: workerId })),
     { onConflict: 'message_id,worker_id', ignoreDuplicates: true },

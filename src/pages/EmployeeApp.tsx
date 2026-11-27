@@ -172,20 +172,13 @@ function MyQrCard() {
   );
 }
 
-/** Wiadomości od przełożonego. Zwykłe oznaczają się jako przeczytane po otwarciu aplikacji, ważne trzeba potwierdzić. */
+/** Wiadomości od przełożonego. Każdą trzeba potwierdzić przyciskiem — przełożony widzi potwierdzenia na żywo. */
 function MyMessages({ w, preview }: { w: Worker; preview: boolean }) {
   const { backend } = useApp();
   const { messages, reads, reload } = useMessages(30);
   const mine = messages.filter((m) => m.worker_ids.includes(w.id));
   const read = new Set(reads.filter((r) => r.worker_id === w.id).map((r) => r.message_id));
   const [showAll, setShowAll] = useState(false);
-  const autoRead = mine.filter((m) => !m.important && !read.has(m.id)).map((m) => m.id).join(',');
-
-  useEffect(() => {
-    if (preview || !autoRead || !backend.client || document.visibilityState !== 'visible') return;
-    const id = window.setTimeout(() => void markRead(backend.client!, w.id, autoRead.split(',')).then(reload), 1500);
-    return () => window.clearTimeout(id);
-  }, [autoRead, preview, backend, w.id, reload]);
 
   useEffect(() => {
     const go = () => location.hash.includes('wiadomosci') && document.getElementById('wiadomosci')?.scrollIntoView({ behavior: 'smooth' });
@@ -211,7 +204,7 @@ function MyMessages({ w, preview }: { w: Worker; preview: boolean }) {
       {list.map((m) => {
         const isNew = !read.has(m.id);
         return (
-          <div key={m.id} className={isNew && m.important ? 'note red stack' : 'list-item'} style={{ alignItems: 'flex-start', gap: 4, marginBottom: isNew && m.important ? 8 : 0 }}>
+          <div key={m.id} className={isNew ? `note ${m.important ? 'red' : 'amber'} stack` : 'list-item'} style={{ alignItems: 'flex-start', gap: 4, marginBottom: isNew ? 8 : 0 }}>
             <div className="grow stack" style={{ gap: 2 }}>
               <div className="sub">
                 {new Date(m.created_at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })}
@@ -220,9 +213,9 @@ function MyMessages({ w, preview }: { w: Worker; preview: boolean }) {
               {m.title && <b>{m.important ? '❗ ' : ''}{m.title}</b>}
               <div style={{ fontSize: 15, whiteSpace: 'pre-wrap', color: 'var(--ink)' }}>{!m.title && m.important ? '❗ ' : ''}{m.body}</div>
             </div>
-            {isNew && m.important && !preview && (
+            {isNew && !preview && (
               <button type="button" className="btn primary" style={{ alignSelf: 'stretch' }} onClick={() => void markRead(backend.client!, w.id, [m.id]).then(reload)}>
-                ✓ {t('Przeczytane')}
+                ✓ {t('Potwierdzam odbiór')}
               </button>
             )}
           </div>

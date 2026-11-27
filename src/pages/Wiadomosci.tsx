@@ -3,8 +3,8 @@ import { useSearchParams } from 'react-router-dom';
 import { useApp } from '../data/AppContext';
 import { deleteMessage, sendMessage, useMessages, usePhones } from '../data/messages';
 import { todayIso, addDays } from '../domain/dates';
-import { audienceLabel, recipients, shiftOptions, shiftRange } from '../domain/messages';
-import type { Audience, Message } from '../domain/messages';
+import { ackStatus, audienceLabel, recipients, shiftOptions, shiftRange } from '../domain/messages';
+import type { Audience, Message, MessageRead } from '../domain/messages';
 import { BRIGADES } from '../domain/types';
 import type { BrigadeId } from '../domain/types';
 import { toast } from '../toast';
@@ -19,7 +19,7 @@ const KINDS: [Kind, string][] = [
   ['all', 'Wszyscy'],
 ];
 
-/** Wiadomości od przełożonego: wysyłka z powiadomieniem na telefon i kto już przeczytał. */
+/** Wiadomości od przełożonego: wysyłka z powiadomieniem na telefon i kto już potwierdził odbiór. */
 export default function Wiadomosci() {
   const { state, backend, canEdit } = useApp();
   const [params] = useSearchParams();
@@ -91,7 +91,7 @@ export default function Wiadomosci() {
     <>
       <div className="page-head">
         <div>
-          <div className="sub">{t('Komunikat trafia na telefon pracownika jako powiadomienie i zostaje w jego aplikacji')}</div>
+          <div className="sub">{t('Komunikat trafia na telefon pracownika jako powiadomienie i zostaje w jego aplikacji. Każdy pracownik musi potwierdzić odbiór; Ty widzisz to na żywo, a przy wiadomości do najwyżej 5 osób dostajesz powiadomienie o każdym potwierdzeniu (przy większej grupie — gdy potwierdzi ostatnia).')}</div>
           <h1>{t('Wiadomości')}</h1>
         </div>
       </div>
@@ -256,17 +256,17 @@ export default function Wiadomosci() {
         {error && <div className="note red">{error}</div>}
         {!loading && messages.length === 0 && <div className="empty">{t('Jeszcze nic nie wysłano.')}</div>}
         {messages.map((m) => (
-          <SentItem key={m.id} m={m} readers={new Set(reads.filter((r) => r.message_id === m.id).map((r) => r.worker_id))} name={name} canEdit={canEdit} />
+          <SentItem key={m.id} m={m} reads={reads.filter((r) => r.message_id === m.id)} name={name} canEdit={canEdit} />
         ))}
       </section>
     </>
   );
 }
 
-function SentItem({ m, readers, name, canEdit }: { m: Message; readers: Set<string>; name: (id: string) => string; canEdit: boolean }) {
+function SentItem({ m, reads, name, canEdit }: { m: Message; reads: MessageRead[]; name: (id: string) => string; canEdit: boolean }) {
   const { backend } = useApp();
   const [open, setOpen] = useState(false);
-  const unread = m.worker_ids.filter((id) => !readers.has(id));
+  const { confirmed, pending: unread } = ackStatus(m, reads);
   const all = unread.length === 0;
   return (
     <div className="list-item" style={{ alignItems: 'flex-start' }}>
@@ -280,14 +280,19 @@ function SentItem({ m, readers, name, canEdit }: { m: Message; readers: Set<stri
           {m.important && <span className="tag red">{t('ważne')}</span>}
           <span className="tag blue">{m.audience}</span>
           <button type="button" className={`tag ${all ? 'green' : 'amber'}`} style={{ border: 0, cursor: 'pointer' }} onClick={() => setOpen(!open)}>
-            {t('przeczytało {r} / {n}', { r: m.worker_ids.length - unread.length, n: m.worker_ids.length })}
+            {t('potwierdziło {r} / {n}', { r: confirmed.length, n: m.worker_ids.length })}
           </button>
         </div>
         {m.title && <b>{m.title}</b>}
         <div style={{ fontSize: 14, whiteSpace: 'pre-wrap' }}>{m.body}</div>
         {open && (
           <div className="sub">
-            {all ? t('Wszyscy przeczytali.') : <>{t('Nie przeczytali:')} {unread.map(name).join(', ')}</>}
+            {confirmed.length > 0 && (
+              <div>
+                {t('Potwierdzili:')} {confirmed.map((c) => `${name(c.id)} (${new Date(c.at).toLocaleString('pl-PL', { dateStyle: 'short', timeStyle: 'short' })})`).join(', ')}
+              </div>
+            )}
+            {all ? t('Wszyscy potwierdzili.') : <div>{t('Jeszcze nie potwierdzili:')} {unread.map(name).join(', ')}</div>}
           </div>
         )}
       </div>

@@ -106,3 +106,12 @@ export interface MessageRead {
   worker_id: string;
   read_at: string;
 }
+
+/** Kto z adresatów potwierdził odbiór (z czasem), a kto jeszcze nie. */
+export function ackStatus(m: Pick<Message, 'worker_ids'>, reads: MessageRead[]): { confirmed: { id: string; at: string }[]; pending: string[] } {
+  const at = new Map(reads.map((r) => [r.worker_id, r.read_at]));
+  return {
+    confirmed: m.worker_ids.filter((id) => at.has(id)).map((id) => ({ id, at: at.get(id)! })),
+    pending: m.worker_ids.filter((id) => !at.has(id)),
+  };
+}
