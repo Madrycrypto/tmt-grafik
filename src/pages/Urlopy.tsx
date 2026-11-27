@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { uid } from '../domain/actions';
 import { monthDays, periodDays, todayIso, weekday } from '../domain/dates';
 import { holidayName } from '../domain/holidays';
@@ -25,7 +25,6 @@ export default function Urlopy() {
   const [view, setView] = usePersistent<'month' | 'year'>('urlopy-view', 'month');
   const year = month.slice(0, 4);
   const yearMode = view === 'year';
-  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
   const lines = useMemo(() => {
     const ls = scope === 'all' ? state.lines : scope.startsWith('g:') ? state.lines.filter((l) => l.group === scope.slice(2)) : state.lines.filter((l) => l.id === scope);
     return ls.map((l) => l.id);
@@ -35,10 +34,8 @@ export default function Urlopy() {
     () => state.workers.filter((w) => w.active && lines.includes(w.lineId)).sort((a, b) => a.lineId.localeCompare(b.lineId) || a.brigade.localeCompare(b.brigade) || a.name.localeCompare(b.name, 'pl')),
     [state.workers, lines],
   );
-  const yearTotals = useMemo(() => (yearMode ? new Map(workers.map((w) => [w.id, leaveBalance(state, w, year)])) : null), [yearMode, workers, state, year]);
   const limit = maxOff === '' ? undefined : Number(maxOff);
   const lineName = (id: string) => state.lines.find((l) => l.id === id)?.name ?? id;
-  const toggleOpen = (k: string, cur: boolean) => setOpenMap((m) => ({ ...m, [k]: !cur }));
   const thisMonth = todayIso().slice(0, 7);
   const preview = useMemo(() => (paste === null ? null : parseLeaveSheet(paste, state.workers)), [paste, state.workers]);
 
@@ -146,38 +143,15 @@ export default function Urlopy() {
         </section>
       )}
 
-      {yearMode ? (
-        <>
-          <div className="row" style={{ marginBottom: 8 }}>
-            <button type="button" className="btn small" onClick={() => setOpenMap(Object.fromEntries(MONTHS.map((_, k) => [`${year}-${String(k + 1).padStart(2, '0')}`, true])))}>{t('Rozwiń wszystko')}</button>
-            <button type="button" className="btn small" onClick={() => setOpenMap(Object.fromEntries(MONTHS.map((_, k) => [`${year}-${String(k + 1).padStart(2, '0')}`, false])))}>{t('Zwiń wszystko')}</button>
-          </div>
-          {MONTHS.map((name, k) => {
-            const m = `${year}-${String(k + 1).padStart(2, '0')}`;
-            const open = openMap[m] ?? m === (thisMonth.startsWith(year) ? thisMonth : `${year}-01`);
-            const planned = leaveDaysIn(state, new Set(workers.map((w) => w.id)), monthDays(m));
-            return (
-              <div key={m} style={{ marginBottom: 10 }}>
-                <button type="button" className="group-head" aria-expanded={open} onClick={() => toggleOpen(m, open)}>
-                  <span className="chev">{open ? '▾' : '▸'}</span>
-                  <h2>{t(name)} {year}</h2>
-                  <span className="sub">{planned ? `${planned} ${t('dni urlopu')}` : t('brak urlopów')}</span>
-                </button>
-                {open && <MonthGrid state={state} month={m} workers={workers} lines={lines} limit={limit} canEdit={canEdit} lineName={lineName} onToggle={toggle} onPool={setPool} yearTotals={yearTotals} />}
-              </div>
-            );
-          })}
-        </>
-      ) : (
-        <MonthGrid state={state} month={month} workers={workers} lines={lines} limit={limit} canEdit={canEdit} lineName={lineName} onToggle={toggle} onPool={setPool} yearTotals={null} />
-      )}
+      <Grid state={state} period={yearMode ? year : month} workers={workers} lines={lines} limit={limit} canEdit={canEdit} lineName={lineName} onToggle={toggle} onPool={setPool} />
     </>
   );
 }
 
 type GridProps = {
   state: AppState;
-  month: string;
+  /** miesiąc („2026-11”) albo cały rok („2026”): rok to jedna tabela z miesiącami jeden za drugim */
+  period: string;
   workers: Worker[];
   lines: string[];
   limit: number | undefined;
@@ -185,120 +159,159 @@ type GridProps = {
   lineName: (id: string) => string;
   onToggle: (workerId: string, date: string, name: string) => void;
   onPool: (workerId: string, value: string) => void;
-  /** w widoku rocznym: plan i wynik za cały rok zamiast za miesiąc */
-  yearTotals: Map<string, ReturnType<typeof leaveBalance>> | null;
 };
 
-/** Tabela urlopów jednego miesiąca: dni w kolumnach, „U” w komórce, pula i wynik z prawej. */
-function MonthGrid({ state, month, workers, lines, limit, canEdit, lineName, onToggle: toggle, onPool: setPool, yearTotals }: GridProps) {
-  const days = useMemo(() => periodDays(month), [month]);
+/** Tabela urlopów: dni w kolumnach, „U” w komórce. W miesiącu pula i wynik są z prawej, w roku z lewej (kolumna „Zostanie” przykleja się do nazw). */
+function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggle: toggle, onPool: setPool }: GridProps) {
+  const yearMode = period.length === 4;
+  const days = useMemo(() => periodDays(period), [period]);
   const load = useMemo(() => leaveLoad(state, days, lines), [state, days, lines]);
+  const dayW = yearMode ? 30 : 34;
+  const months = useMemo(
+    () => (yearMode ? MONTHS.map((name, k) => ({ name, key: `${period}-${String(k + 1).padStart(2, '0')}` })) : []),
+    [yearMode, period],
+  );
+  const ids = useMemo(() => new Set(workers.map((w) => w.id)), [workers]);
+  const monthLeave = useMemo(() => months.map((m) => leaveDaysIn(state, ids, monthDays(m.key))), [months, state, ids]);
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    // rok otwiera się na bieżącym dniu, żeby od razu planować „od teraz” w prawo
+    const idx = days.indexOf(todayIso());
+    if (yearMode && box.current) box.current.scrollLeft = idx > 0 ? idx * dayW : 0;
+  }, [yearMode, period, days, dayW]);
+  const nameCol = 200;
+  const stickyLeft = { position: 'sticky' as const, left: nameCol, background: 'var(--surface)', zIndex: 1 };
+  const poolInput = (w: Worker, pool: number | undefined) => (
+    <input className="input" type="number" min={0} style={{ width: 58, padding: '2px 4px', textAlign: 'center' }} value={pool ?? ''} disabled={!canEdit} onChange={(e) => setPool(w.id, e.target.value)} />
+  );
+  const leftTag = (left: number | undefined) => (left === undefined ? '—' : <span className={`tag ${left < 0 ? 'red' : left <= 2 ? 'amber' : 'green'}`}>{left}</span>);
+  const colspanTail = yearMode ? 0 : 3;
   return (
-      <section className="card">
-        <div className="scroll-x">
-          <table style={{ minWidth: 40 * days.length + 420, tableLayout: 'fixed' }}>
-            <thead>
+    <section className="card">
+      <div className="scroll-x" ref={box}>
+        <table style={{ minWidth: dayW * days.length + 420 + (yearMode ? 90 : 0), tableLayout: 'fixed' }}>
+          <thead>
+            {yearMode && (
               <tr>
-                <th className="sticky-col" style={{ width: 200 }}>{t('Pracownik')}</th>
-                <th style={{ width: 54 }}>{t('Brygada')}</th>
-                {days.map((d) => (
-                  <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 34, padding: '6px 1px', color: isOffDay(d) ? 'var(--red-ink)' : undefined, background: isOffDay(d) ? OFF_TINT : undefined }}>
-                    {t(DOW[weekday(d)])}
-                    <br />
-                    {d.slice(8)}
+                <th className="sticky-col" style={{ width: nameCol }} />
+                <th style={{ ...stickyLeft, width: 80, zIndex: 2 }} />
+                <th colSpan={3} />
+                {months.map((m, k) => (
+                  <th key={m.key} colSpan={monthDays(m.key).length} style={{ textAlign: 'left', padding: '6px 6px', borderLeft: '2px solid var(--line)' }}>
+                    {t(m.name)} <span className="sub">{monthLeave[k] ? `· ${monthLeave[k]} ${t('dni urlopu')}` : ''}</span>
                   </th>
                 ))}
-                <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>
-                {yearTotals && <th style={{ width: 70, textAlign: 'center' }}>{t('UW w miesiącu')}</th>}
-                <th style={{ width: 70, textAlign: 'center' }}>{yearTotals ? t('UW w roku') : t('Plan UW')}</th>
-                <th style={{ width: 70, textAlign: 'center' }}>{yearTotals ? t('Zostanie po roku') : t('Zostanie')}</th>
               </tr>
-            </thead>
-            <tbody>
-              {workers.map((w, i) => {
-                const mon = leaveBalance(state, w, month);
-                const bal = yearTotals?.get(w.id) ?? mon;
-                const newLine = i === 0 || workers[i - 1].lineId !== w.lineId;
-                return (
-                  <tr key={w.id} style={newLine ? { borderTop: '2px solid var(--line)' } : undefined}>
-                    <td className="sticky-col" style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`${w.name} · ${lineName(w.lineId)}`}>
-                      {w.name}
-                      {newLine && <div className="sub" style={{ fontWeight: 400 }}>{lineName(w.lineId)}</div>}
-                    </td>
-                    <td>{w.brigade}</td>
-                    {days.map((d) => {
-                      const sh = plannedShift(state, w, d);
-                      const leave = hasLeave(state, w.id, d);
-                      const def = sh?.code ? shiftDef(state, sh.code) : undefined;
-                      return (
-                        <td key={d} style={{ padding: '3px 1px', textAlign: 'center', background: isOffDay(d) ? OFF_TINT : undefined }}>
-                          <button
-                            type="button"
-                            disabled={!canEdit}
-                            className="cell c-W"
-                            style={{
-                              width: 30,
-                              height: 24,
-                              opacity: sh || leave ? 1 : 0.35,
-                              background: leave ? 'var(--green-bg, #dff3e4)' : isOffDay(d) && !sh ? 'transparent' : undefined,
-                              color: leave ? 'var(--green-ink, #14532d)' : undefined,
-                              fontWeight: leave ? 700 : 400,
-                            }}
-                            title={`${d} ${sh ? (def?.label ?? sh.code) : t('wolne')}${leave ? ' · UW' : ''}`}
-                            onClick={() => toggle(w.id, d, w.name)}
-                          >
-                            {leave ? 'U' : sh ? (def?.label ?? '·') : ''}
-                          </button>
-                        </td>
-                      );
-                    })}
-                    <td style={{ textAlign: 'center' }}>
-                      <input
-                        className="input"
-                        type="number"
-                        min={0}
-                        style={{ width: 58, padding: '2px 4px', textAlign: 'center' }}
-                        value={bal.pool ?? ''}
-                        disabled={!canEdit}
-                        onChange={(e) => setPool(w.id, e.target.value)}
-                      />
-                    </td>
-                    {yearTotals && <td style={{ textAlign: 'center' }}>{mon.planned || '—'}</td>}
-                    <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>
-                    <td style={{ textAlign: 'center' }}>
-                      {bal.left === undefined ? '—' : <span className={`tag ${bal.left < 0 ? 'red' : bal.left <= 2 ? 'amber' : 'green'}`}>{bal.left}</span>}
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr style={{ borderTop: '2px solid var(--line)' }}>
-                <td className="sticky-col" style={{ fontWeight: 700 }}>{t('Urlopy w dniu')}</td>
-                <td />
-                {load.map((x) => (
-                  <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: limit !== undefined && x.onLeave > limit ? 'var(--red-ink)' : undefined, background: limit !== undefined && x.onLeave > limit ? 'var(--red-bg, #fde2e2)' : isOffDay(x.date) ? OFF_TINT : undefined }}>
-                    {x.onLeave || ''}
+            )}
+            <tr>
+              <th className="sticky-col" style={{ width: nameCol }}>{t('Pracownik')}</th>
+              {yearMode && <th style={{ ...stickyLeft, width: 80, textAlign: 'center', zIndex: 2 }}>{t('Zostanie')}</th>}
+              {yearMode && <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>}
+              {yearMode && <th style={{ width: 70, textAlign: 'center' }}>{t('UW w roku')}</th>}
+              <th style={{ width: 54 }}>{t('Brygada')}</th>
+              {days.map((d) => (
+                <th
+                  key={d}
+                  title={holidayName(d) ?? ''}
+                  style={{ textAlign: 'center', width: dayW, padding: '6px 1px', color: isOffDay(d) ? 'var(--red-ink)' : undefined, background: isOffDay(d) ? OFF_TINT : undefined, borderLeft: yearMode && d.endsWith('-01') ? '2px solid var(--line)' : undefined }}
+                >
+                  {t(DOW[weekday(d)])}
+                  <br />
+                  {d.slice(8)}
+                </th>
+              ))}
+              {!yearMode && (
+                <>
+                  <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>
+                  <th style={{ width: 70, textAlign: 'center' }}>{t('Plan UW')}</th>
+                  <th style={{ width: 70, textAlign: 'center' }}>{t('Zostanie')}</th>
+                </>
+              )}
+            </tr>
+          </thead>
+          <tbody>
+            {workers.map((w, i) => {
+              const bal = leaveBalance(state, w, period);
+              const newLine = i === 0 || workers[i - 1].lineId !== w.lineId;
+              return (
+                <tr key={w.id} style={newLine ? { borderTop: '2px solid var(--line)' } : undefined}>
+                  <td className="sticky-col" style={{ fontWeight: 600, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }} title={`${w.name} · ${lineName(w.lineId)}`}>
+                    {w.name}
+                    {newLine && <div className="sub" style={{ fontWeight: 400 }}>{lineName(w.lineId)}</div>}
                   </td>
-                ))}
-                <td colSpan={yearTotals ? 4 : 3} />
-              </tr>
-              <tr>
-                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }} title={t('Stanowiska bez wymaganej obsady kwalifikowanej po odjęciu urlopów')}>
-                  {t('Luki na stanowiskach')}
+                  {yearMode && <td style={{ ...stickyLeft, textAlign: 'center' }}>{leftTag(bal.left)}</td>}
+                  {yearMode && <td style={{ textAlign: 'center' }}>{poolInput(w, bal.pool)}</td>}
+                  {yearMode && <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>}
+                  <td>{w.brigade}</td>
+                  {days.map((d) => {
+                    const sh = plannedShift(state, w, d);
+                    const leave = hasLeave(state, w.id, d);
+                    const def = sh?.code ? shiftDef(state, sh.code) : undefined;
+                    return (
+                      <td key={d} style={{ padding: '3px 1px', textAlign: 'center', background: isOffDay(d) ? OFF_TINT : undefined, borderLeft: yearMode && d.endsWith('-01') ? '2px solid var(--line)' : undefined }}>
+                        <button
+                          type="button"
+                          disabled={!canEdit}
+                          className="cell c-W"
+                          style={{
+                            width: dayW - 4,
+                            height: 24,
+                            minWidth: 0,
+                            opacity: sh || leave ? 1 : 0.35,
+                            background: leave ? 'var(--green-bg, #dff3e4)' : isOffDay(d) && !sh ? 'transparent' : undefined,
+                            color: leave ? 'var(--green-ink, #14532d)' : undefined,
+                            fontWeight: leave ? 700 : 400,
+                          }}
+                          title={`${d} ${sh ? (def?.label ?? sh.code) : t('wolne')}${leave ? ' · UW' : ''}`}
+                          onClick={() => toggle(w.id, d, w.name)}
+                        >
+                          {leave ? 'U' : sh ? (def?.label ?? '·') : ''}
+                        </button>
+                      </td>
+                    );
+                  })}
+                  {!yearMode && (
+                    <>
+                      <td style={{ textAlign: 'center' }}>{poolInput(w, bal.pool)}</td>
+                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>
+                      <td style={{ textAlign: 'center' }}>{leftTag(bal.left)}</td>
+                    </>
+                  )}
+                </tr>
+              );
+            })}
+            <tr style={{ borderTop: '2px solid var(--line)' }}>
+              <td className="sticky-col" style={{ fontWeight: 700 }}>{t('Urlopy w dniu')}</td>
+              {yearMode && <td style={stickyLeft} />}
+              {yearMode && <td colSpan={2} />}
+              <td />
+              {load.map((x) => (
+                <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: limit !== undefined && x.onLeave > limit ? 'var(--red-ink)' : undefined, background: limit !== undefined && x.onLeave > limit ? 'var(--red-bg, #fde2e2)' : isOffDay(x.date) ? OFF_TINT : undefined }}>
+                  {x.onLeave || ''}
                 </td>
-                <td />
-                {load.map((x) => (
-                  <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: 'var(--red-ink)', background: isOffDay(x.date) ? OFF_TINT : undefined }}>
-                    {x.gaps || ''}
-                  </td>
-                ))}
-                <td colSpan={yearTotals ? 4 : 3} />
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="sub" style={{ marginTop: 8 }}>
-          {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i wynik po urlopach z prawej.')}
-        </div>
-      </section>
+              ))}
+              {colspanTail > 0 && <td colSpan={colspanTail} />}
+            </tr>
+            <tr>
+              <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }} title={t('Stanowiska bez wymaganej obsady kwalifikowanej po odjęciu urlopów')}>
+                {t('Luki na stanowiskach')}
+              </td>
+              {yearMode && <td style={stickyLeft} />}
+              {yearMode && <td colSpan={2} />}
+              <td />
+              {load.map((x) => (
+                <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: 'var(--red-ink)', background: isOffDay(x.date) ? OFF_TINT : undefined }}>
+                  {x.gaps || ''}
+                </td>
+              ))}
+              {colspanTail > 0 && <td colSpan={colspanTail} />}
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <div className="sub" style={{ marginTop: 8 }}>
+        {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i wynik po urlopach z prawej.')}
+      </div>
+    </section>
   );
 }

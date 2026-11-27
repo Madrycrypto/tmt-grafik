@@ -838,7 +838,6 @@ export const zh: Record<string, string> = {
   'Rok': '年',
   'UW w miesiącu': '本月休假',
   'UW w roku': '全年休假',
-  'Zostanie po roku': '年末剩余',
   'brak urlopów': '无休假',
   'dni urlopu': '休假天数',
   'styczeń': '一月',
