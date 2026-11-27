@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { plannedShift } from './coverage';
-import { monthDays } from './dates';
-import { hasLeave, leaveBalance, leaveLoad, parseLeaveSheet, setLeaveDay } from './leave';
+import { monthDays, periodDays } from './dates';
+import { hasLeave, leaveBalance, leaveDaysIn, leaveLoad, parseLeaveSheet, setLeaveDay } from './leave';
 import { demoState } from './seed';
 import type { Absence } from './types';
 
@@ -67,5 +67,34 @@ describe('urlopy', () => {
     expect(r.unmatched).toEqual(['Nikt Taki']);
     expect(r.days).toBe(3);
     expect(parseLeaveSheet('nic\ntu nie ma dat', s.workers).matched).toHaveLength(0);
+  });
+});
+
+describe('urlopy: cały rok', () => {
+  it('okres roczny to 365 dni (366 w przestępnym), miesięczny bez zmian', () => {
+    expect(periodDays('2026')).toHaveLength(365);
+    expect(periodDays('2028')).toHaveLength(366);
+    expect(periodDays('2026-11')).toEqual(monthDays('2026-11'));
+  });
+  it('plan roczny to suma planów miesięcy, a pula pomniejsza się o całość', () => {
+    const s = demoState();
+    const w = s.workers.find((x) => x.active)!;
+    w.leaveDays = 26;
+    s.absences.push({ id: 'u1', workerId: w.id, from: '2026-03-02', to: '2026-03-06', reason: 'UW' }, { id: 'u2', workerId: w.id, from: '2026-11-02', to: '2026-11-06', reason: 'UW' });
+    const months = Array.from({ length: 12 }, (_, i) => leaveBalance(s, w, `2026-${String(i + 1).padStart(2, '0')}`).planned);
+    const year = leaveBalance(s, w, '2026');
+    expect(year.planned).toBe(months.reduce((a, b) => a + b, 0));
+    expect(year.planned).toBeGreaterThan(leaveBalance(s, w, '2026-03').planned);
+    expect(year.left).toBe(26 - year.planned);
+  });
+  it('liczy dni urlopu w miesiącu tylko dla wybranych osób i tylko UW', () => {
+    const s = demoState();
+    s.absences = [
+      { id: 'a', workerId: 'w1', from: '2026-03-30', to: '2026-04-02', reason: 'UW' },
+      { id: 'b', workerId: 'w2', from: '2026-03-30', to: '2026-04-02', reason: 'UW' },
+      { id: 'c', workerId: 'w1', from: '2026-03-30', to: '2026-03-31', reason: 'L4' },
+    ];
+    expect(leaveDaysIn(s, new Set(['w1']), monthDays('2026-03'))).toBe(2);
+    expect(leaveDaysIn(s, new Set(['w1']), monthDays('2026-04'))).toBe(2);
   });
 });

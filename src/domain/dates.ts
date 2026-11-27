@@ -56,3 +56,9 @@ export function fmtDate(d: string): string {
 export function mod(n: number, m: number): number {
   return ((n % m) + m) % m;
 }
+
+/** Dni okresu: miesiąc („2026-11”) albo cały rok („2026”). */
+export function periodDays(period: string): string[] {
+  if (period.length !== 4) return monthDays(period);
+  return Array.from({ length: 12 }, (_, i) => monthDays(`${period}-${String(i + 1).padStart(2, '0')}`)).flat();
+}

@@ -1,5 +1,5 @@
 import { absenceOn, lineStatus, plannedShift } from './coverage';
-import { addDays, monthDays } from './dates';
+import { addDays, periodDays } from './dates';
 import { shiftDef } from './rota';
 import type { Absence, AppState, Worker } from './types';
 
@@ -44,8 +44,8 @@ export interface LeaveBalance {
   left: number | undefined;
 }
 
-export function leaveBalance(state: AppState, w: Worker, month: string): LeaveBalance {
-  const planned = leaveWorkDays(state, w, monthDays(month));
+export function leaveBalance(state: AppState, w: Worker, period: string): LeaveBalance {
+  const planned = leaveWorkDays(state, w, periodDays(period));
   return { pool: w.leaveDays, planned, left: w.leaveDays === undefined ? undefined : w.leaveDays - planned };
 }
 
@@ -142,4 +142,14 @@ export function parseLeaveSheet(text: string, workers: Worker[]): LeaveImport {
     }
   }
   return { matched, unmatched, days };
+}
+
+/** Ile dni urlopu (UW) wpisano osobom z listy w podanych dniach — do podsumowania miesięcy w widoku rocznym. */
+export function leaveDaysIn(state: AppState, workerIds: Set<string>, dates: string[]): number {
+  let n = 0;
+  for (const a of state.absences) {
+    if (a.reason !== 'UW' || !workerIds.has(a.workerId)) continue;
+    for (const d of dates) if (d >= a.from && d <= a.to) n++;
+  }
+  return n;
 }
