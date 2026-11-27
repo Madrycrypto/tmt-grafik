@@ -14,6 +14,7 @@ import { useApp } from '../data/AppContext';
 import { DeadlinesCard, Icon, Sheet, TypeTag, LineOptions, scopeLineIds, useScope } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
+import { TrainingCard } from './Training';
 import { inviteWorkers, printBadges, printCards, revokeWorker, useAccounts } from './Invites';
 import { callApi } from '../rcp/api';
 import type { Account, InviteResult } from './Invites';
@@ -270,6 +271,7 @@ function WorkerForm({
       )}
       {!isNew && <WorkerHours worker={initial} />}
       {!isNew && <WorkerAbsences worker={w} />}
+      {!isNew && <TrainingCard worker={w} />}
       <div className="row">
         <button type="button" className="btn primary grow" onClick={save} disabled={!w.name.trim()}>
           {t('Zapisz')}

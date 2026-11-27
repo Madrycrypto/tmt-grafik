@@ -7,9 +7,15 @@ import { useApp } from '../data/AppContext';
 import { Level, LevelPicker, LineSelect, TypeTag, useLine, usePersistent } from '../ui';
 import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
+import { useTraining } from '../data/training';
 
 export default function Matrix() {
-  const { state, update, undo, canEdit } = useApp();
+  const { state, update, undo, canEdit, backend } = useApp();
+  const { records } = useTraining();
+  // znacznik braku dokumentu pokazujemy tylko z bazą; w trybie demo nie ma skąd wziąć wpisów
+  const docsOn = !!backend.client;
+  const docSet = useMemo(() => new Set(records.map((r) => `${r.worker_id}|${r.station_id}|${r.level}`)), [records]);
+  const missingDoc = (workerId: string, stationId: string, lv: number) => docsOn && [1, 2, 3, 4].some((l) => l <= lv && !docSet.has(`${workerId}|${stationId}|${l}`));
   const [lineId, setLineId] = useLine(state);
   const [brigade, setBrigade] = useState<string>('all');
   const [others, setOthers] = useState(false);
@@ -144,6 +150,11 @@ export default function Matrix() {
             <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
               <b aria-hidden>★</b> {t('stanowisko specjalne')}
             </span>
+            {docsOn && (
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+                <span aria-hidden style={{ width: 8, height: 8, borderRadius: 8, background: '#d9822b', display: 'inline-block' }} /> {t('brak dokumentu szkolenia')}
+              </span>
+            )}
           </div>
           <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={others} onChange={(e) => setOthers(e.target.checked)} />
@@ -208,7 +219,10 @@ export default function Matrix() {
                       {(wide || w.lineId !== lineId) && <span className="tag" style={{ marginLeft: 4 }}>{state.lines.find((l) => l.id === w.lineId)?.name}</span>}
                     </td>
                     {stations.map((s) => (
-                      <td key={s.id} style={{ textAlign: 'center', background: w.homeStationId === s.id ? 'var(--accent-soft)' : undefined }}>
+                      <td key={s.id} style={{ textAlign: 'center', position: 'relative', background: w.homeStationId === s.id ? 'var(--accent-soft)' : undefined }}>
+                        {missingDoc(w.id, s.id, level(w, s.id)) && (
+                          <span title={t('Brak dokumentu szkolenia — otwórz kartę pracownika')} style={{ position: 'absolute', top: 6, right: '28%', width: 8, height: 8, borderRadius: 8, background: '#d9822b' }} />
+                        )}
                         {canEdit ? (
                           <LevelPicker
                             value={level(w, s.id)}
