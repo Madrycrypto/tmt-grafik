@@ -2,7 +2,10 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { uid } from '../domain/actions';
 import { monthDays, periodDays, todayIso, weekday } from '../domain/dates';
 import { holidayName } from '../domain/holidays';
-import { hasLeave, leaveBalance, leaveDaysIn, leaveLoad, parseLeaveSheet, setLeaveDay } from '../domain/leave';
+import { applyLeaveReport, hasLeave, isOnDemandDay, leaveBalance, leaveDaysIn, leaveLoad, ON_DEMAND_DAYS, parseLeaveSheet, resolveLeaveReport, setLeaveDay } from '../domain/leave';
+import { useLeaveReports } from '../data/leaveReports';
+import type { ReportStatus } from '../data/leaveReports';
+import { fmtDate } from '../domain/dates';
 import { plannedShift } from '../domain/coverage';
 import { shiftDef } from '../domain/rota';
 import { useApp } from '../data/AppContext';
@@ -143,8 +146,64 @@ export default function Urlopy() {
         </section>
       )}
 
+      <ReportsPanel />
       <Grid state={state} period={yearMode ? year : month} workers={workers} lines={lines} limit={limit} canEdit={canEdit} lineName={lineName} onToggle={toggle} onPool={setPool} />
     </>
+  );
+}
+
+/** Zgłoszenia urlopów od pracowników: lider sprawdza, czy dzień był zaplanowany, i wybiera, skąd go zabrać. */
+function ReportsPanel() {
+  const { state, update, canEdit, backend } = useApp();
+  const { reports, reload } = useLeaveReports();
+  const pending = reports.filter((r) => r.status === 'pending');
+  if (!pending.length) return null;
+  const nameOf = (id: string) => state.workers.find((w) => w.id === id)?.name ?? id;
+  const done = async (id: string, status: ReportStatus, note?: string) => {
+    await backend.client?.from('leave_reports').update({ status, resolved_note: note ?? null, resolved_at: new Date().toISOString() }).eq('id', id);
+    await reload();
+  };
+  const resolve = (r: (typeof pending)[number], mode: 'planned' | 'from-plan' | 'on-demand', planDate?: string) => {
+    update((d) => {
+      d.absences = applyLeaveReport(d.absences, r.worker_id, r.date, mode, planDate, () => uid('ab'));
+    }, `Urlop zgłoszony: ${nameOf(r.worker_id)} ${r.date}`);
+    void done(r.id, mode === 'planned' ? 'confirmed' : mode === 'from-plan' ? 'from_plan' : 'on_demand', planDate);
+  };
+  return (
+    <section className="card stack">
+      <h3 style={{ marginTop: 0 }}>
+        {t('Zgłoszone urlopy')} <span className="tag amber">{pending.length}</span>
+      </h3>
+      {pending.map((r) => {
+        const w = state.workers.find((x) => x.id === r.worker_id);
+        const res = w ? resolveLeaveReport(state, w, r.date) : undefined;
+        return (
+          <div key={r.id} className="list-item" style={{ alignItems: 'flex-start', gap: 8, flexWrap: 'wrap' }}>
+            <div className="grow stack" style={{ gap: 2 }}>
+              <b>{nameOf(r.worker_id)} · {fmtDate(r.date)}</b>
+              <div className="sub">
+                {!res && t('Nie znaleziono pracownika.')}
+                {res?.kind === 'planned' && t('Ten dzień był zaplanowany jako urlop.')}
+                {res?.kind === 'from-plan' && `${t('Nie był zaplanowany. Zabierzemy dzień z planu:')} ${fmtDate(res.planDate)}. ${t('Na żądanie zostało')} ${res.onDemandLeft} ${t('z')} ${ON_DEMAND_DAYS}.`}
+                {res?.kind === 'on-demand' && `${t('Brak zaplanowanego urlopu do zabrania — pójdzie z puli na żądanie.')} ${t('Zostało')} ${res.onDemandLeft} ${t('z')} ${ON_DEMAND_DAYS}.`}
+              </div>
+            </div>
+            {canEdit && res && (
+              <div className="row">
+                {res.kind === 'planned' && <button type="button" className="btn primary small" onClick={() => resolve(r, 'planned')}>{t('Potwierdź')}</button>}
+                {res.kind === 'from-plan' && <button type="button" className="btn primary small" onClick={() => resolve(r, 'from-plan', res.planDate)}>{t('Zabierz z planu')}</button>}
+                {res.kind !== 'planned' && (
+                  <button type="button" className={`btn small ${res.kind === 'on-demand' ? 'primary' : ''}`} disabled={res.onDemandLeft <= 0} onClick={() => resolve(r, 'on-demand')}>
+                    {t('Z puli na żądanie')}
+                  </button>
+                )}
+                <button type="button" className="btn small ghost" onClick={() => void done(r.id, 'rejected')}>{t('Odrzuć')}</button>
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </section>
   );
 }
 
@@ -262,10 +321,10 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
                             color: leave ? 'var(--green-ink, #14532d)' : undefined,
                             fontWeight: leave ? 700 : 400,
                           }}
-                          title={`${d} ${sh ? (def?.label ?? sh.code) : t('wolne')}${leave ? ' · UW' : ''}`}
+                          title={`${d} ${sh ? (def?.label ?? sh.code) : t('wolne')}${leave ? (isOnDemandDay(state, w.id, d) ? ` · UW ${t('na żądanie')}` : ' · UW') : ''}`}
                           onClick={() => toggle(w.id, d, w.name)}
                         >
-                          {leave ? 'U' : sh ? (def?.label ?? '·') : ''}
+                          {leave ? (isOnDemandDay(state, w.id, d) ? 'Ż' : 'U') : sh ? (def?.label ?? '·') : ''}
                         </button>
                       </td>
                     );
@@ -301,7 +360,7 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
         </table>
       </div>
       <div className="sub" style={{ marginTop: 8 }}>
-        {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i saldo zawsze z lewej. Cztery dni z puli zostają na żądanie i zwalniają się w grudniu.')}
+        {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i saldo zawsze z lewej. „U” to urlop zaplanowany, „Ż” to urlop na żądanie (4 dni z puli, zwalniają się w grudniu).')}
       </div>
     </section>
   );

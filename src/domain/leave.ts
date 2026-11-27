@@ -12,11 +12,11 @@ export function hasLeave(state: AppState, workerId: string, date: string): boole
  * Włącza lub wyłącza urlop (UW) na jeden dzień. Wyłączenie dzieli szerszy zakres urlopu,
  * zamiast kasować go w całości. Inne powody nieobecności (L4, NN) zostają nietknięte.
  */
-export function setLeaveDay(abs: Absence[], workerId: string, date: string, on: boolean, newId: () => string): Absence[] {
+export function setLeaveDay(abs: Absence[], workerId: string, date: string, on: boolean, newId: () => string, note?: string): Absence[] {
   const covers = (a: Absence) => a.workerId === workerId && a.reason === 'UW' && a.from <= date && date <= a.to;
   if (on) {
     if (abs.some(covers)) return abs;
-    return [...abs, { id: newId(), workerId, from: date, to: date, reason: 'UW' }];
+    return [...abs, { id: newId(), workerId, from: date, to: date, reason: 'UW', ...(note ? { note } : {}) }];
   }
   const out: Absence[] = [];
   for (const a of abs) {
@@ -39,6 +39,13 @@ export function leaveWorkDays(state: AppState, w: Worker, dates: string[]): numb
 
 /** Urlop na żądanie: tyle dni z puli zostaje poza planem, aż do grudnia. */
 export const ON_DEMAND_DAYS = 4;
+/** Znacznik urlopu na żądanie w polu notatki nieobecności (to nadal UW, więc pomniejsza pulę). */
+export const ON_DEMAND_NOTE = 'na żądanie';
+
+export function isOnDemandDay(state: AppState, workerId: string, date: string): boolean {
+  const a = absenceOn(state, workerId, date);
+  return a?.reason === 'UW' && a.note === ON_DEMAND_NOTE;
+}
 
 export interface LeaveBalance {
   /** pula przed planem; undefined = nie wpisano */
@@ -47,17 +54,22 @@ export interface LeaveBalance {
   left: number | undefined;
   /** ile jeszcze można zaplanować do listopada (pula minus plan minus dni na żądanie); w grudniu rezerwa się zwalnia */
   plannable: number | undefined;
+  /** ile z 4 dni na żądanie jeszcze zostało */
+  onDemandLeft: number;
 }
 
 export function leaveBalance(state: AppState, w: Worker, period: string): LeaveBalance {
   const planned = leaveWorkDays(state, w, periodDays(period));
   const left = w.leaveDays === undefined ? undefined : w.leaveDays - planned;
+  const workUw = periodDays(period).filter((d) => hasLeave(state, w.id, d) && plannedShift(state, w, d));
+  const used = workUw.filter((d) => isOnDemandDay(state, w.id, d)).length;
+  const onDemandLeft = Math.max(ON_DEMAND_DAYS - used, 0);
   const decStart = period.length === 4 ? `${period}-12-01` : undefined;
-  const reserve = decStart ? ON_DEMAND_DAYS : 0;
-  // plan z grudnia może korzystać z rezerwy, więc do limitu „do listopada” liczy się tylko plan sprzed grudnia
-  const beforeDec = decStart ? leaveWorkDays(state, w, periodDays(period).filter((d) => d < decStart)) : planned;
-  const plannable = w.leaveDays === undefined ? undefined : Math.max(w.leaveDays - reserve, 0) - beforeDec;
-  return { pool: w.leaveDays, planned, left, plannable };
+  // plan z grudnia może korzystać z rezerwy, więc do limitu „do listopada” liczy się tylko zaplanowany urlop sprzed grudnia
+  const planBeforeDec = workUw.filter((d) => !isOnDemandDay(state, w.id, d) && (!decStart || d < decStart)).length;
+  const reserve = decStart ? Math.max(ON_DEMAND_DAYS, used) : 0;
+  const plannable = w.leaveDays === undefined ? undefined : Math.max(w.leaveDays - reserve, 0) - planBeforeDec;
+  return { pool: w.leaveDays, planned, left, plannable, onDemandLeft };
 }
 
 export interface DayLoad {
@@ -163,4 +175,31 @@ export function leaveDaysIn(state: AppState, workerIds: Set<string>, dates: stri
     for (const d of dates) if (d >= a.from && d <= a.to) n++;
   }
   return n;
+}
+
+export type ReportResolution =
+  | { kind: 'planned' }
+  | { kind: 'from-plan'; planDate: string; onDemandLeft: number }
+  | { kind: 'on-demand'; onDemandLeft: number };
+
+/**
+ * Pracownik zgłasza, że bierze urlop w dniu. Jeśli był zaplanowany — tylko potwierdzamy.
+ * Jeśli nie — proponujemy zabrać najbliższy zaplanowany dzień (najpierw późniejszy, potem wcześniejszy),
+ * a gdy planu brak, urlop idzie z puli na żądanie.
+ */
+export function resolveLeaveReport(state: AppState, w: Worker, date: string): ReportResolution {
+  if (hasLeave(state, w.id, date)) return { kind: 'planned' };
+  const onDemandLeft = leaveBalance(state, w, date.slice(0, 4)).onDemandLeft;
+  const year = periodDays(date.slice(0, 4));
+  const plan = year.filter((d) => d !== date && hasLeave(state, w.id, d) && plannedShift(state, w, d) && !isOnDemandDay(state, w.id, d));
+  const planDate = plan.find((d) => d > date) ?? [...plan].reverse().find((d) => d < date);
+  return planDate ? { kind: 'from-plan', planDate, onDemandLeft } : { kind: 'on-demand', onDemandLeft };
+}
+
+/** Wpisuje rozpatrzone zgłoszenie do nieobecności. */
+export function applyLeaveReport(abs: Absence[], workerId: string, date: string, mode: 'planned' | 'from-plan' | 'on-demand', planDate: string | undefined, newId: () => string): Absence[] {
+  if (mode === 'planned') return abs;
+  if (mode === 'on-demand') return setLeaveDay(abs, workerId, date, true, newId, ON_DEMAND_NOTE);
+  const without = planDate ? setLeaveDay(abs, workerId, planDate, false, newId) : abs;
+  return setLeaveDay(without, workerId, date, true, newId);
 }

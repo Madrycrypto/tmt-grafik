@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { plannedShift } from './coverage';
 import { monthDays, periodDays } from './dates';
-import { hasLeave, leaveBalance, leaveDaysIn, leaveLoad, parseLeaveSheet, setLeaveDay } from './leave';
+import { applyLeaveReport, hasLeave, leaveBalance, resolveLeaveReport, leaveDaysIn, leaveLoad, parseLeaveSheet, setLeaveDay } from './leave';
 import { demoState } from './seed';
 import type { Absence } from './types';
 
@@ -36,7 +36,7 @@ describe('urlopy', () => {
     s.absences = setLeaveDay(s.absences, w.id, work, true, ids());
     s.absences = setLeaveDay(s.absences, w.id, off, true, ids());
     expect(hasLeave(s, w.id, off)).toBe(true);
-    expect(leaveBalance(s, w, m)).toEqual({ pool: 10, planned: 1, left: 9, plannable: 9 });
+    expect(leaveBalance(s, w, m)).toEqual({ pool: 10, planned: 1, left: 9, plannable: 9, onDemandLeft: 4 });
     w.leaveDays = undefined;
     expect(leaveBalance(s, w, m).left).toBeUndefined();
   });
@@ -101,6 +101,31 @@ describe('urlopy: cały rok', () => {
     expect(b.left).toBe(2);
     for (const d of wd('2026-06', 3)) s.absences = setLeaveDay(s.absences, w.id, d, true, ids());
     expect(leaveBalance(s, w, '2026').plannable).toBe(-2);
+  });
+  it('zgłoszony urlop: zaplanowany tylko potwierdza, niezaplanowany zabiera dzień z planu, bez planu idzie na żądanie', () => {
+    const s = demoState();
+    const w = s.workers.find((x) => x.active)!;
+    w.leaveDays = 10;
+    const wd = (m: string) => monthDays(m).filter((d) => plannedShift(s, w, d));
+    const [p1, p2] = wd('2026-08');
+    const [r1] = wd('2026-06');
+    s.absences = [];
+    for (const d of [p1, p2]) s.absences = setLeaveDay(s.absences, w.id, d, true, ids());
+    expect(resolveLeaveReport(s, w, p1)).toEqual({ kind: 'planned' });
+    const res = resolveLeaveReport(s, w, r1);
+    expect(res).toMatchObject({ kind: 'from-plan', planDate: p1, onDemandLeft: 4 });
+    const after = { ...s, absences: applyLeaveReport(s.absences, w.id, r1, 'from-plan', p1, ids()) };
+    expect(hasLeave(after, w.id, r1)).toBe(true);
+    expect(hasLeave(after, w.id, p1)).toBe(false);
+    expect(leaveBalance(after, w, '2026').planned).toBe(2);
+    // bez planu: z puli na żądanie, pula 4 maleje, a limit „do XI” się nie zmniejsza
+    const none = { ...s, absences: [] as typeof s.absences };
+    expect(resolveLeaveReport(none, w, r1)).toEqual({ kind: 'on-demand', onDemandLeft: 4 });
+    const od = { ...s, absences: applyLeaveReport([], w.id, r1, 'on-demand', undefined, ids()) };
+    const b = leaveBalance(od, w, '2026');
+    expect(b.onDemandLeft).toBe(3);
+    expect(b.left).toBe(9);
+    expect(b.plannable).toBe(6);
   });
   it('liczy dni urlopu w miesiącu tylko dla wybranych osób i tylko UW', () => {
     const s = demoState();

@@ -5,6 +5,7 @@ import { callApi } from '../rcp/api';
 import qrcode from 'qrcode-generator';
 import { usePunches } from '../data/punches';
 import { markRead, useMessages } from '../data/messages';
+import { useLeaveReports } from '../data/leaveReports';
 import { checkDay, fmtMin, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import { useEffect, useMemo, useState } from 'react';
 import { addDays, fmtDate, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
@@ -230,6 +231,47 @@ function MyMessages({ w, preview }: { w: Worker; preview: boolean }) {
   );
 }
 
+function MyLeave({ w }: { w: Worker }) {
+  const { backend } = useApp();
+  const { reports, reload } = useLeaveReports();
+  const [date, setDate] = useState('');
+  const [err, setErr] = useState<string | null>(null);
+  const mine = reports.filter((r) => r.worker_id === w.id && r.date >= addDays(todayIso(), -30));
+  const label = { pending: 'czeka na lidera', confirmed: 'potwierdzony', from_plan: 'zabrany z planu', on_demand: 'na żądanie', rejected: 'odrzucony' } as const;
+  const send = async () => {
+    const db = backend.client;
+    if (!db || !date) return;
+    setErr(null);
+    const { error } = await db.from('leave_reports').insert({ worker_id: w.id, date });
+    if (error) setErr(error.code === '23505' ? t('Ten dzień już zgłoszono.') : t('Nie udało się zgłosić urlopu.'));
+    else setDate('');
+    await reload();
+  };
+  const withdraw = async (id: string) => {
+    await backend.client?.from('leave_reports').delete().eq('id', id);
+    await reload();
+  };
+  return (
+    <section className="card stack">
+      <h3 style={{ marginTop: 0 }}>{t('Zgłoś urlop')}</h3>
+      <div className="sub">{t('Wybierz dzień, w którym bierzesz urlop. Lider sprawdzi, czy był zaplanowany, i potwierdzi.')}</div>
+      <div className="row">
+        <input className="input" type="date" min={addDays(todayIso(), -7)} value={date} onChange={(e) => setDate(e.target.value)} />
+        <button type="button" className="btn primary" disabled={!date} onClick={() => void send()}>{t('Zgłoś')}</button>
+      </div>
+      {err && <div className="note red">{err}</div>}
+      {mine.map((r) => (
+        <div key={r.id} className="list-item">
+          <div className="grow">
+            <b>{fmtDate(r.date)}</b> <span className="sub">· {t(label[r.status])}</span>
+          </div>
+          {r.status === 'pending' && <button type="button" className="btn small ghost" onClick={() => void withdraw(r.id)}>{t('Wycofaj')}</button>}
+        </div>
+      ))}
+    </section>
+  );
+}
+
 function MyPunches({ w }: { w: Worker }) {
   const { state } = useApp();
   const today = todayIso();
@@ -386,6 +428,7 @@ export default function EmployeeApp({ previewId }: { previewId?: string }) {
             </section>
 
             {!previewId && <PushCard />}
+            {!previewId && <MyLeave w={w} />}
             {!previewId && <MyPunches w={w} />}
 
             <section className="card">
