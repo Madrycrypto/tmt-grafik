@@ -135,6 +135,15 @@ export default function Matrix() {
                 <Level value={l} /> {t(LEVEL_LABEL[l])}
               </span>
             ))}
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span aria-hidden style={{ width: 22, height: 22, borderRadius: 4, background: 'var(--accent-soft)', border: '1px solid var(--line)' }} /> {t('stanowisko macierzyste')}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <Level value={2} min={3} /> {t('poniżej minimum stanowiska')}
+            </span>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <b aria-hidden>★</b> {t('stanowisko specjalne')}
+            </span>
           </div>
           <label className="sub" style={{ display: 'inline-flex', gap: 6, alignItems: 'center' }}>
             <input type="checkbox" checked={others} onChange={(e) => setOthers(e.target.checked)} />
