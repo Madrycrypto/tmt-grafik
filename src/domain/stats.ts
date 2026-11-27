@@ -1,5 +1,6 @@
-import { absenceOn, lineStatus, placement, plannedShift } from './coverage';
-import { monthDays, todayIso } from './dates';
+import { absenceOn, lineStatus, placement, plannedShift, qualified } from './coverage';
+import { monthDays, todayIso, weekday } from './dates';
+import { monthNorm } from './norm';
 import { checkDay } from './punches';
 import type { Punch } from './punches';
 import { shiftDef } from './rota';
@@ -283,4 +284,149 @@ export function trend(state: AppState, month: string, lines: LineScope, n = 6): 
     }
   }
   return out;
+}
+
+export interface RiskRow {
+  lineName: string;
+  stationName: string;
+  special: boolean;
+  brigade: string;
+  required: number;
+  /** liczba aktywnych osób z wymaganym poziomem w tej brygadzie */
+  qualified: number;
+  names: string[];
+  /** none = nikt (stanowisko nie do obsadzenia), sole = tylko tyle, ile wymaga stanowisko (brak zastępcy) */
+  risk: 'none' | 'sole';
+}
+
+/** Mapa ryzyka kompetencji: stanowiska, na których brygada nie ma zastępcy (lub nikogo). */
+export function skillRisk(state: AppState, lines: LineScope): RiskRow[] {
+  const out: RiskRow[] = [];
+  for (const lineId of lines) {
+    const line = state.lines.find((l) => l.id === lineId);
+    if (!line) continue;
+    const brigades = [...new Set(state.workers.filter((w) => w.active && w.lineId === lineId).map((w) => w.brigade))].sort();
+    for (const st of state.stations.filter((x) => x.lineId === lineId).sort((a, b) => a.order - b.order)) {
+      for (const b of brigades) {
+        const q = state.workers.filter((w) => w.active && w.lineId === lineId && w.brigade === b && qualified(w, st));
+        if (q.length > st.required) continue;
+        out.push({
+          lineName: line.name,
+          stationName: st.name,
+          special: !!st.special,
+          brigade: b,
+          required: st.required,
+          qualified: q.length,
+          names: q.map((w) => w.name),
+          risk: q.length < st.required ? 'none' : 'sole',
+        });
+      }
+    }
+  }
+  // najpierw braki całkowite, potem stanowiska specjalne
+  return out.sort((a, b) => Number(a.risk === 'sole') - Number(b.risk === 'sole') || Number(b.special) - Number(a.special) || a.lineName.localeCompare(b.lineName, 'pl'));
+}
+
+export interface OvertimeRow {
+  workerId: string;
+  name: string;
+  line: string;
+  brigade: string;
+  /** godziny zaplanowane w grafiku (także w dni nieobecności — liczą się do normy) */
+  plannedHours: number;
+  extraHours: number;
+  totalHours: number;
+  normHours: number;
+  /** godziny ponad normę miesiąca (0, gdy w normie) */
+  overHours: number;
+}
+
+/** Godziny każdej osoby na tle normy miesiąca; ponad normę = nadgodziny. */
+export function overtime(state: AppState, month: string, lines: LineScope): OvertimeRow[] {
+  const days = monthDays(month);
+  const norm = monthNorm(month).hours;
+  const out: OvertimeRow[] = [];
+  for (const w of state.workers.filter((x) => inScope(x, lines))) {
+    let planned = 0;
+    let extra = 0;
+    for (const d of days) {
+      const sh = plannedShift(state, w, d);
+      if (!sh) continue;
+      if (sh.extra) {
+        if (!absenceOn(state, w.id, d)) extra += hoursOf(sh);
+      } else planned += hoursOf(sh);
+    }
+    const total = planned + extra;
+    if (!total) continue;
+    out.push({
+      workerId: w.id,
+      name: w.name,
+      line: state.lines.find((l) => l.id === w.lineId)?.name ?? '',
+      brigade: w.brigade,
+      plannedHours: planned,
+      extraHours: extra,
+      totalHours: total,
+      normHours: norm,
+      overHours: Math.max(0, total - norm),
+    });
+  }
+  return out.sort((a, b) => b.overHours - a.overHours || b.extraHours - a.extraHours || a.name.localeCompare(b.name, 'pl'));
+}
+
+export interface PunctualRow {
+  workerId: string;
+  name: string;
+  line: string;
+  checked: number;
+  late: number;
+  lateMin: number;
+  early: number;
+  missing: number;
+}
+
+/** Punktualność z odbić RCP, osobno dla każdej osoby (tylko dni do dzisiaj). */
+export function punctuality(state: AppState, month: string, lines: LineScope, punches: Punch[]): PunctualRow[] {
+  const today = todayIso();
+  const out: PunctualRow[] = [];
+  for (const w of state.workers.filter((x) => inScope(x, lines))) {
+    const r: PunctualRow = { workerId: w.id, name: w.name, line: state.lines.find((l) => l.id === w.lineId)?.name ?? '', checked: 0, late: 0, lateMin: 0, early: 0, missing: 0 };
+    for (const d of monthDays(month)) {
+      if (d >= today) break;
+      const c = checkDay(state, w, d, punches);
+      if (!c.plan || c.absence || c.plan.extra) continue;
+      r.checked++;
+      if (c.lateMin) {
+        r.late++;
+        r.lateMin += c.lateMin;
+      }
+      if (c.earlyMin) r.early++;
+      if (c.status === 'missing') r.missing++;
+    }
+    if (r.checked && (r.late || r.early || r.missing)) out.push(r);
+  }
+  return out.sort((a, b) => b.late + b.early + b.missing - (a.late + a.early + a.missing) || b.lateMin - a.lateMin);
+}
+
+export interface WeekdayRow {
+  /** 1 = poniedziałek … 7 = niedziela */
+  dow: number;
+  planned: number;
+  absent: number;
+  absentRate: number;
+}
+
+/** Nieobecności według dnia tygodnia — poniedziałki i piątki zwykle zdradzają problem pierwsze. */
+export function weekdayAbsences(state: AppState, month: string, lines: LineScope): WeekdayRow[] {
+  const rows: WeekdayRow[] = [1, 2, 3, 4, 5, 6, 7].map((dow) => ({ dow, planned: 0, absent: 0, absentRate: 0 }));
+  for (const w of state.workers.filter((x) => inScope(x, lines))) {
+    for (const d of monthDays(month)) {
+      const sh = plannedShift(state, w, d);
+      if (!sh || sh.extra) continue;
+      const r = rows[(weekday(d) + 6) % 7];
+      r.planned++;
+      if (absenceOn(state, w.id, d)) r.absent++;
+    }
+  }
+  for (const r of rows) r.absentRate = r.planned ? r.absent / r.planned : 0;
+  return rows.filter((r) => r.planned);
 }

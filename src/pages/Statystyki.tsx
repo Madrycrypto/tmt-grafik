@@ -1,6 +1,8 @@
 import { useMemo } from 'react';
 import { addDays, monthDays, todayIso } from '../domain/dates';
-import { attendanceRows, shiftComparison, sumRows, topAbsences, transfers, trend } from '../domain/stats';
+import { attendanceRows, overtime, punctuality, shiftComparison, skillRisk, sumRows, topAbsences, transfers, trend, weekdayAbsences } from '../domain/stats';
+import { buildStatsWorkbook, statsFileName } from '../domain/statsExport';
+import { downloadXlsx } from './WorkerBulk';
 import type { AttendanceRow } from '../domain/stats';
 import { useApp } from '../data/AppContext';
 import { usePunches } from '../data/punches';
@@ -31,6 +33,15 @@ export default function Statystyki() {
   const moves = useMemo(() => transfers(state, month, lines), [state, month, lines]);
   const absentees = useMemo(() => topAbsences(state, month, lines), [state, month, lines]);
   const tr = useMemo(() => trend(state, month, lines), [state, month, lines]);
+  const risk = useMemo(() => skillRisk(state, lines), [state, lines]);
+  const hours = useMemo(() => overtime(state, month, lines), [state, month, lines]);
+  const overList = hours.filter((r) => r.overHours > 0 || r.extraHours > 0).slice(0, 10);
+  const weekdays = useMemo(() => weekdayAbsences(state, month, lines), [state, month, lines]);
+  const late = useMemo(() => (hasRcp ? punctuality(state, month, lines, punches).slice(0, 10) : []), [state, month, lines, punches, hasRcp]);
+  const maxDow = Math.max(0.01, ...weekdays.map((r) => r.absentRate));
+  const scopeName = scope === 'all' ? 'Cały zakład' : scope.startsWith('g:') ? scope.slice(2) : (state.lines.find((l) => l.id === scope)?.name ?? '');
+  const exportXlsx = () => downloadXlsx(statsFileName(scopeName, month), buildStatsWorkbook(state, month, scopeName, lines, hasRcp ? punches : undefined));
+  const DOW = ['Pn', 'Wt', 'Śr', 'Cz', 'Pt', 'So', 'Nd'];
   const maxRate = Math.max(0.01, ...tr.map((p) => p.absentRate));
   const maxExtra = Math.max(1, ...tr.map((p) => p.extraHours));
   const movedDays = moves.reduce((s, r) => s + r.days, 0);
@@ -61,6 +72,9 @@ export default function Statystyki() {
             {t('Miesiąc')}
             <input className="input" type="month" value={month} onChange={(e) => e.target.value && setMonth(e.target.value)} />
           </label>
+          <button type="button" className="btn" onClick={exportXlsx} title={t('Plik .xlsx: obecność, zmiany, ryzyko, godziny, dni tygodnia, przeniesienia i RCP')}>
+            {t('Eksport do Excela')}
+          </button>
         </div>
       </div>
 
@@ -265,6 +279,146 @@ export default function Statystyki() {
           </div>
         </section>
       </div>
+
+
+      <section className="card" style={{ marginTop: 14 }}>
+        <div className="card-head">
+          <h2>{t('Ryzyko kompetencji')}</h2>
+          <span className="sub">{t('Brygady, w których stanowisko ma tylko tyle wykwalifikowanych osób, ile wymaga — nie ma zastępcy')}</span>
+        </div>
+        <div className="scroll-x">
+          <table style={{ minWidth: 640 }}>
+            <thead>
+              <tr>
+                <th>{t('Linia')}</th>
+                <th>{t('Stanowisko')}</th>
+                <th>{t('Brygada')}</th>
+                <th style={{ textAlign: 'right' }}>{t('Wymagane')}</th>
+                <th style={{ textAlign: 'right' }}>{t('Wykwalifikowani')}</th>
+                <th>{t('Ryzyko')}</th>
+                <th>{t('Kto')}</th>
+              </tr>
+            </thead>
+            <tbody>
+              {risk.slice(0, 40).map((r) => (
+                <tr key={`${r.lineName}-${r.stationName}-${r.brigade}`}>
+                  <td>{r.lineName}</td>
+                  <td style={{ fontWeight: 600 }}>{r.special ? '★ ' : ''}{r.stationName}</td>
+                  <td>{r.brigade}</td>
+                  <td style={{ textAlign: 'right' }}>{r.required}</td>
+                  <td style={{ textAlign: 'right' }}>{r.qualified}</td>
+                  <td>
+                    <span className={`tag ${r.risk === 'none' ? 'red' : 'amber'}`}>{r.risk === 'none' ? t('brak obsady') : t('brak zastępcy')}</span>
+                  </td>
+                  <td>{r.names.join(', ') || '—'}</td>
+                </tr>
+              ))}
+              {!risk.length && (
+                <tr>
+                  <td colSpan={7} className="sub">{t('Każde stanowisko ma zastępcę w każdej brygadzie.')}</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        {risk.length > 40 && <div className="sub" style={{ marginTop: 8 }}>{t('Pełna lista w eksporcie do Excela.')}</div>}
+      </section>
+
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: 14, marginTop: 14 }}>
+        <section className="card">
+          <div className="card-head">
+            <h2>{t('Godziny i nadgodziny')}</h2>
+            <span className="sub">{t('Grafik + dodatkowe zmiany na tle normy miesiąca; w systemie okresów rozliczeniowych liczy się cały okres')} ({hours[0]?.normHours ?? 0} h)</span>
+          </div>
+          <div className="scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>{t('Pracownik')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Razem (h)')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Dodatkowe (h)')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Ponad normę (h)')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {overList.map((r) => (
+                  <tr key={r.workerId}>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ textAlign: 'right' }}>{r.totalHours}</td>
+                    <td style={{ textAlign: 'right' }}>{r.extraHours}</td>
+                    <td style={{ textAlign: 'right' }}>{r.overHours ? <span className="tag red">{r.overHours}</span> : '—'}</td>
+                  </tr>
+                ))}
+                {!overList.length && (
+                  <tr>
+                    <td colSpan={4} className="sub">{t('Nikt nie przekracza normy ani nie ma dodatkowych zmian.')}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        <section className="card">
+          <div className="card-head">
+            <h2>{t('Nieobecności według dnia tygodnia')}</h2>
+            <span className="sub">{t('% zaplanowanych zmian danego dnia')}</span>
+          </div>
+          <div style={{ display: 'flex', gap: 10, alignItems: 'end', height: 130 }}>
+            {weekdays.map((r) => (
+              <div key={r.dow} style={{ flex: 1, textAlign: 'center' }} title={`${r.absent} / ${r.planned}`}>
+                <div className="sub">{pct(r.absentRate)}</div>
+                <div style={{ height: `${Math.max(3, (r.absentRate / maxDow) * 80)}px`, background: r.dow === 1 || r.dow === 5 ? 'var(--amber, #e0881f)' : 'var(--accent, #2457d6)', borderRadius: 3 }} />
+                <div style={{ fontSize: 12, fontWeight: 600, marginTop: 4 }}>{DOW[r.dow - 1]}</div>
+              </div>
+            ))}
+            {!weekdays.length && <div className="sub">{t('Brak zaplanowanych zmian.')}</div>}
+          </div>
+          <div className="sub" style={{ marginTop: 8 }}>{t('Pomarańczowe: poniedziałek i piątek — nieobecności „przy weekendzie”.')}</div>
+        </section>
+      </div>
+
+      {hasRcp && (
+        <section className="card" style={{ marginTop: 14 }}>
+          <div className="card-head">
+            <h2>{t('Punktualność RCP — osoby')}</h2>
+            <span className="sub">{t('Tylko dni do dzisiaj; tolerancja 5 min')}</span>
+          </div>
+          <div className="scroll-x">
+            <table>
+              <thead>
+                <tr>
+                  <th>{t('Pracownik')}</th>
+                  <th>{t('Linia')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Dni')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Spóźnienia')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Min')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Wcześniejsze wyjścia')}</th>
+                  <th style={{ textAlign: 'right' }}>{t('Brak odbicia')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {late.map((r) => (
+                  <tr key={r.workerId}>
+                    <td style={{ fontWeight: 600 }}>{r.name}</td>
+                    <td>{r.line}</td>
+                    <td style={{ textAlign: 'right' }}>{r.checked}</td>
+                    <td style={{ textAlign: 'right' }}>{r.late}</td>
+                    <td style={{ textAlign: 'right' }}>{r.lateMin}</td>
+                    <td style={{ textAlign: 'right' }}>{r.early}</td>
+                    <td style={{ textAlign: 'right' }}>{r.missing}</td>
+                  </tr>
+                ))}
+                {!late.length && (
+                  <tr>
+                    <td colSpan={7} className="sub">{t('Brak spóźnień, wcześniejszych wyjść i brakujących odbić.')}</td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="card" style={{ marginTop: 14 }}>
         <div className="card-head">

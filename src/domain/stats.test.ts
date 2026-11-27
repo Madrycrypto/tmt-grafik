@@ -71,3 +71,58 @@ describe('statystyki', () => {
     for (let i = 1; i < top.length; i++) expect(top[i - 1].days).toBeGreaterThanOrEqual(top[i].days);
   });
 });
+
+import { overtime, punctuality, skillRisk, weekdayAbsences } from './stats';
+import { buildStatsWorkbook } from './statsExport';
+
+describe('statystyki — rozszerzenia', () => {
+  it('ryzyko: brygada z jedną wykwalifikowaną osobą na stanowisku z wymogiem 1 to „brak zastępcy”, a bez nikogo „brak obsady”', () => {
+    const s = demoState();
+    const st = s.stations[0];
+    const ws = s.workers.filter((w) => w.active && w.lineId === st.lineId && w.brigade === 'A');
+    for (const w of ws) w.skills[st.id] = { level: 0 } as never;
+    ws[0].skills[st.id] = { level: 4 } as never;
+    const r = skillRisk(s, [st.lineId]).find((x) => x.stationName === st.name && x.brigade === 'A')!;
+    expect(r.qualified).toBe(1);
+    if (st.required === 1) expect(r.risk).toBe('sole');
+    ws[0].skills[st.id] = { level: 0 } as never;
+    const none = skillRisk(s, [st.lineId]).find((x) => x.stationName === st.name && x.brigade === 'A')!;
+    expect(none.risk).toBe('none');
+  });
+
+  it('godziny: norma miesiąca i godziny ponad normę liczone z grafiku', () => {
+    const s = demoState();
+    const rows = overtime(s, M, all(s));
+    expect(rows.length).toBeGreaterThan(0);
+    for (const r of rows) {
+      expect(r.totalHours).toBe(r.plannedHours + r.extraHours);
+      expect(r.overHours).toBe(Math.max(0, r.totalHours - r.normHours));
+    }
+  });
+
+  it('dni tygodnia: suma planu zgadza się z obecnością, a nieobecność trafia w swój dzień', () => {
+    const s = demoState();
+    const base = weekdayAbsences(s, M, all(s));
+    expect(base.reduce((n, r) => n + r.planned, 0)).toBe(sumRows(attendanceRows(s, M, all(s))).planned);
+    const w = s.workers.find((x) => x.active && x.patternId === 'p8')!;
+    const day = monthDays(M).find((d) => plannedShift(s, w, d))!;
+    s.absences.push({ id: 'a-dow', workerId: w.id, from: day, to: day, reason: 'UW' });
+    const after = weekdayAbsences(s, M, all(s));
+    expect(after.reduce((n, r) => n + r.absent, 0)).toBe(base.reduce((n, r) => n + r.absent, 0) + 1);
+  });
+
+  it('RCP: dni bez odbić z przeszłości to „brak odbicia”, bez odbić w ogóle brak wierszy w przyszłości', () => {
+    const s = demoState();
+    const rows = punctuality(s, '2020-01', all(s), []);
+    expect(rows.length).toBeGreaterThan(0);
+    expect(rows[0].missing).toBeGreaterThan(0);
+    expect(punctuality(s, '2999-01', all(s), [])).toHaveLength(0);
+  });
+
+  it('eksport statystyk to poprawny zip xlsx z arkuszami', () => {
+    const bytes = buildStatsWorkbook(demoState(), M, 'Cały zakład', all(demoState()));
+    expect(bytes[0]).toBe(0x50);
+    expect(bytes[1]).toBe(0x4b);
+    expect(new TextDecoder('latin1').decode(bytes)).toContain('xl/worksheets/sheet7.xml');
+  });
+});
