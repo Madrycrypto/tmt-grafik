@@ -106,6 +106,12 @@ export default function Grafik() {
   const membersOf = (b: BrigadeId) =>
     state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && (scope === 'all' || scopeLines.some((l) => l.id === w.lineId))).length;
 
+  /** Przy wyborze całej linii: liczba osób brygady w każdej podlinii (Lutowanie 4 · Rdzenie 8 · Moduły 29). */
+  const byLine = (b: BrigadeId) =>
+    scopeLines
+      .map((l) => ({ id: l.id, name: l.name, n: state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && w.lineId === l.id).length }))
+      .filter((x) => x.n > 0);
+
   return (
     <>
       <div className="page-head">
@@ -163,7 +169,7 @@ export default function Grafik() {
           <table style={{ minWidth: 40 * days.length + 220, tableLayout: 'fixed' }}>
             <thead>
               <tr>
-                <th className="sticky-col" style={{ width: 96 }}>{t('Brygada')}</th>
+                <th className="sticky-col" style={{ width: 130 }}>{t('Brygada')}</th>
                 {days.map((d) => (
                   <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 || holidayName(d) ? 'var(--red-ink)' : undefined }}>
                     {t(WEEKDAY_SHORT[weekday(d)])}
@@ -186,6 +192,12 @@ export default function Grafik() {
                       <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
                       {b}
                       <div className="sub" style={{ fontWeight: 400 }} title={t('pracownicy w tym systemie na wszystkich liniach')}>{membersOf(b)} os.</div>
+                      {byLine(b).length > 1 &&
+                        byLine(b).map((x) => (
+                          <div key={x.id} className="sub" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>
+                            {x.name} · {x.n}
+                          </div>
+                        ))}
                     </td>
                     {cells.map((c) => {
                       const cls =
