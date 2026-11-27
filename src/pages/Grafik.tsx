@@ -4,8 +4,8 @@ import { uid } from '../domain/actions';
 import { WEEKDAY_LONG, WEEKDAY_SHORT, fmtRange, monthDays, todayIso, weekday } from '../domain/dates';
 import { baseCode, brigadeMonth, gapsOnDay, patternShiftCodes, summarize } from '../domain/rota';
 import type { RotaCell } from '../domain/rota';
-import { OFF, holidaysOff, patternBrigades } from '../domain/types';
-import type { BrigadeId, Exclusion, Pattern } from '../domain/types';
+import { OFF, holidaysOff, linePatterns, patternBrigades } from '../domain/types';
+import type { AppState, BrigadeId, Exclusion, Line, Pattern } from '../domain/types';
 import { useApp } from '../data/AppContext';
 import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent, useScope } from '../ui';
@@ -32,7 +32,6 @@ export default function Grafik() {
   // dni potrzebne do wymiaru; przy 12 h w dół, żeby nie przekroczyć wymiaru
   const normDays = Math.floor(norm.hours / shiftH);
   const groups = [...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))];
-  const days = monthDays(month);
   const label = (code: string) => t(code === OFF ? 'W' : (state.shiftDefs.find((s) => s.code === code)?.label ?? code));
   const colorOf = (code: string) => {
     const d = state.shiftDefs.find((x) => x.code === code);
@@ -68,9 +67,25 @@ export default function Grafik() {
   );
   const [hr, setHr] = useState(false);
   const [fill, setFill] = useState(false);
+  // harmonijki: zwinięte/rozwinięte grupy i podlinie (klucz → stan); brak klucza = domyślnie
+  const [openMap, setOpenMap] = useState<Record<string, boolean>>({});
+  const overview = scope === 'all' || scope.startsWith('g:');
+  const sections = useMemo(() => {
+    const m = new Map<string, Line[]>();
+    for (const l of scopeLines) m.set(l.group ?? l.name, [...(m.get(l.group ?? l.name) ?? []), l]);
+    return [...m].map(([name, lines]) => ({ name, lines }));
+  }, [scopeLines.map((l) => l.id).join()]); // eslint-disable-line react-hooks/exhaustive-deps
+  const isOpen = (k: string, def: boolean) => openMap[k] ?? def;
+  const toggle = (k: string, cur: boolean) => setOpenMap((m) => ({ ...m, [k]: !cur }));
+  const setAllOpen = (v: boolean) => setOpenMap(Object.fromEntries([...sections.map((g) => ['g:' + g.name, v]), ...scopeLines.map((l) => ['l:' + l.id, v])]));
+  /** Systemy zmianowe podlinii: te z ludźmi albo przypisane wprost; bez nich — wybrany system. */
+  const lineGridPatterns = (lineId: string) => {
+    const line = state.lines.find((l) => l.id === lineId);
+    const ps = linePatterns(state, lineId).filter((p) => line?.patternIds?.length || state.workers.some((w) => w.active && w.lineId === lineId && w.patternId === p.id));
+    return ps.length ? ps : pattern ? [pattern] : [];
+  };
 
   if (!pattern) return <div className="card empty">{t('Brak zdefiniowanych wzorców zmian (Ustawienia).')}</div>;
-  const codes = patternShiftCodes(pattern);
 
   const printXlsx = () => {
     const scopeName = scope === 'all' ? 'Cały zakład' : scope.startsWith('g:') ? scope.slice(2) : (scopeLines[0]?.name ?? '');
@@ -78,14 +93,14 @@ export default function Grafik() {
     downloadXlsx(printFileName(scopeName, pattern.name, month), bytes);
   };
 
-  const cycle = (b: BrigadeId, c: RotaCell) => {
-    const options = [...codes, OFF];
+  const cycle = (pat: Pattern, b: BrigadeId, c: RotaCell) => {
+    const options = [...patternShiftCodes(pat), OFF];
     const next = options[(options.indexOf(c.code) + 1) % options.length];
-    const base = baseCode(pattern, b, c.date);
+    const base = baseCode(pat, b, c.date);
     update((d) => {
-      d.rotaOverrides = d.rotaOverrides.filter((o) => !(o.patternId === pattern.id && o.brigade === b && o.date === c.date));
-      if (next !== base) d.rotaOverrides.push({ id: uid('ro'), patternId: pattern.id, brigade: b, date: c.date, code: next });
-    }, `Grafik ${pattern.name}: brygada ${b}, ${c.date} → ${label(next)}`);
+      d.rotaOverrides = d.rotaOverrides.filter((o) => !(o.patternId === pat.id && o.brigade === b && o.date === c.date));
+      if (next !== base) d.rotaOverrides.push({ id: uid('ro'), patternId: pat.id, brigade: b, date: c.date, code: next });
+    }, `Grafik ${pat.name}: brygada ${b}, ${c.date} → ${label(next)}`);
   };
 
   const setTarget = (b: BrigadeId | 'all', value: string) => {
@@ -105,12 +120,6 @@ export default function Grafik() {
 
   const membersOf = (b: BrigadeId) =>
     state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && (scope === 'all' || scopeLines.some((l) => l.id === w.lineId))).length;
-
-  /** Przy wyborze całej linii: liczba osób brygady w każdej podlinii (Lutowanie 4 · Rdzenie 8 · Moduły 29). */
-  const byLine = (b: BrigadeId) =>
-    scopeLines
-      .map((l) => ({ id: l.id, name: l.name, n: state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && w.lineId === l.id).length }))
-      .filter((x) => x.n > 0);
 
   return (
     <>
@@ -164,115 +173,57 @@ export default function Grafik() {
         />
       )}
 
-      <section className="card">
-        <div className="scroll-x">
-          <table style={{ minWidth: 40 * days.length + 220, tableLayout: 'fixed' }}>
-            <thead>
-              <tr>
-                <th className="sticky-col" style={{ width: 130 }}>{t('Brygada')}</th>
-                {days.map((d) => (
-                  <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 || holidayName(d) ? 'var(--red-ink)' : undefined }}>
-                    {t(WEEKDAY_SHORT[weekday(d)])}
-                    <br />
-                    {d.slice(8)}
-                  </th>
-                ))}
-                <th style={{ width: 150, textAlign: 'center' }} title={t('Wymiar czasu pracy w tym miesiącu: {h} h ({d} dni roboczych)', { h: norm.hours, d: norm.workdays })}>
-                  {t('Dni · godz. / wymiar')}
-                  <div className="sub" style={{ fontWeight: 400 }}>{t('wymiar')} {norm.hours} h</div>
-                </th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map(({ b, cells }) => {
-                const s = summary.find((x) => x.brigade === b)!;
-                return (
-                  <tr key={b}>
-                    <td className="sticky-col" style={{ fontWeight: 700 }}>
-                      <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
-                      {b}
-                      <div className="sub" style={{ fontWeight: 400 }} title={t('pracownicy w tym systemie na wszystkich liniach')}>{membersOf(b)} os.</div>
-                      {byLine(b).length > 1 &&
-                        byLine(b).map((x) => (
-                          <div key={x.id} className="sub" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>
-                            {x.name} · {x.n}
-                          </div>
-                        ))}
-                    </td>
-                    {cells.map((c) => {
-                      const cls =
-                        c.status === 'excluded'
-                          ? 'c-excluded'
-                          : c.status === 'trimmed'
-                            ? 'c-trimmed'
-                            : c.status === 'holiday'
-                              ? 'c-holiday'
-                              : c.status === 'off'
-                                ? 'c-W'
-                                : colorOf(c.code);
-                      const title =
-                        c.status === 'holiday'
-                          ? `${t('święto')}: ${t(holidayName(c.date) ?? '')}`
-                          : c.status === 'excluded'
-                          ? t('wyłączone (kalendarz zakładu)')
-                          : c.status === 'trimmed'
-                            ? t('dodatkowe wolne (cel dni)')
-                            : c.overridden
-                              ? t('zmienione ręcznie')
-                              : '';
-                      return (
-                        <td key={c.date} style={{ padding: '4px 2px' }}>
-                          <button type="button" className={`cell ${cls} ${c.overridden ? 'c-ov' : ''}`} title={`${c.date} ${label(c.code)} ${title}`} onClick={() => cycle(b, c)}>
-                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? t('w') : c.status === 'holiday' ? t('Ś') : label(c.code)}
-                          </button>
-                        </td>
-                      );
-                    })}
-                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
-                      {s.days}
-                      {s.target !== undefined ? ` / ${s.target}` : ''} {t('dni')} · {s.hours} h
-                      <div>
-                        <span className={`tag ${s.hours < norm.hours ? 'red' : s.hours > norm.hours ? 'amber' : 'green'}`} title={s.hours < norm.hours ? t('Za mało godzin względem wymiaru — brakujące godziny trzeba dopełnić (np. na innej linii)') : s.hours > norm.hours ? t('Więcej godzin niż wymiar — nadgodziny albo odbiór dni wolnych') : t('Zgodnie z wymiarem')}>
-                          {s.hours === norm.hours ? '✓' : `${s.hours > norm.hours ? '+' : '−'}${Math.abs(s.hours - norm.hours)} h`}
-                        </span>
-                      </div>
-                    </td>
-                  </tr>
-                );
-              })}
-              <tr>
-                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }}>{t('Luki')}</td>
-                {days.map((d) => {
-                  const g = gapsOnDay(state, pattern.id, d);
-                  return (
-                    <td key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--red-ink)', padding: '4px 2px' }} title={g.length ? t('Brak brygady na zmianie — obsadź 12 h, agencją lub nadgodzinami') : ''}>
-                      {g.map(label).join(' ')}
-                    </td>
-                  );
-                })}
-                <td />
-              </tr>
-            </tbody>
-          </table>
-        </div>
-        <div className="legend" style={{ marginTop: 12 }}>
-          {codes.map((c) => {
-            const def = state.shiftDefs.find((s) => s.code === c);
+      {overview ? (
+        <>
+          <div className="row" style={{ marginBottom: 8 }}>
+            <button type="button" className="btn small" onClick={() => setAllOpen(true)}>{t('Rozwiń wszystko')}</button>
+            <button type="button" className="btn small" onClick={() => setAllOpen(false)}>{t('Zwiń wszystko')}</button>
+          </div>
+          {sections.map((g) => {
+            const gOpen = isOpen('g:' + g.name, true);
+            const gPeople = state.workers.filter((w) => w.active && g.lines.some((l) => l.id === w.lineId)).length;
             return (
-              <span key={c}>
-                <span className={`cell ${colorOf(c)}`}>{label(c)}</span>
-                {def ? fmtRange(def.start, def.hours) : c}
-                {def?.credit ? ` (+${def.credit} h ${t('należne, postój')})` : ''}
-              </span>
+              <div key={g.name} style={{ marginBottom: 12 }}>
+                <button type="button" className="group-head" aria-expanded={gOpen} onClick={() => toggle('g:' + g.name, gOpen)}>
+                  <span className="chev">{gOpen ? '▾' : '▸'}</span>
+                  <h2>{g.name}</h2>
+                  <span className="sub">{g.lines.length > 1 ? `${g.lines.length} ${t('podlinie')} · ` : ''}{gPeople} {t('os.')}</span>
+                </button>
+                {gOpen &&
+                  g.lines.map((l) => {
+                    const key = 'l:' + l.id;
+                    const lOpen = isOpen(key, scope.startsWith('g:') || g.lines.length === 1);
+                    const pats = lineGridPatterns(l.id);
+                    const people = state.workers.filter((w) => w.active && w.lineId === l.id).length;
+                    return (
+                      <div key={l.id} style={{ marginLeft: 16, marginTop: 8 }}>
+                        <button type="button" className="group-head" aria-expanded={lOpen} onClick={() => toggle(key, lOpen)} style={{ padding: '10px 14px' }}>
+                          <span className="chev">{lOpen ? '▾' : '▸'}</span>
+                          <strong>{l.name}</strong>
+                          <span className="sub">{people} {t('os.')} · {pats.map((p) => p.name).join(', ')}</span>
+                        </button>
+                        {lOpen && (
+                          <section className="card" style={{ marginTop: 6 }}>
+                            {pats.map((p) => (
+                              <div key={p.id} style={{ marginBottom: 12 }}>
+                                {pats.length > 1 && <div className="sub" style={{ marginBottom: 4 }}>{p.name}</div>}
+                                <RotaGrid state={state} month={month} pattern={p} lineIds={[l.id]} norm={norm} label={label} colorOf={colorOf} onCycle={cycle} />
+                              </div>
+                            ))}
+                          </section>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
             );
           })}
-          <span><span className="cell c-W">{t('W')}</span>{t('wolne')}</span>
-          <span><span className="cell c-trimmed">{t('w')}</span>{t('dodatkowe wolne (cel dni)')}</span>
-          <span><span className="cell c-excluded">✕</span>{t('wyłączone')}</span>
-          <span><span className="cell c-holiday">{t('Ś')}</span>{t('święto ustawowe')}{holidaysOff(pattern) ? '' : ` (${t('ten system pracuje w święta')})`}</span>
-          <span><span className="cell c-W c-ov">{t('R')}</span>{t('zmiana ręczna')}</span>
-        </div>
-      </section>
+        </>
+      ) : (
+        <section className="card">
+          <RotaGrid state={state} month={month} pattern={pattern} lineIds={scopeLines.map((l) => l.id)} norm={norm} label={label} colorOf={colorOf} onCycle={cycle} />
+        </section>
+      )}
 
       <section className="card">
         <div className="card-head">
@@ -645,5 +596,144 @@ function Exclusions({ pattern }: { pattern: Pattern }) {
         </button>
       </div>
     </section>
+  );
+}
+
+
+type GridProps = {
+  state: AppState;
+  month: string;
+  pattern: Pattern;
+  /** linie, których ludzie liczą się w kolumnie brygady */
+  lineIds: string[];
+  norm: { hours: number; workdays: number };
+  label: (code: string) => string;
+  colorOf: (code: string) => string;
+  onCycle: (pattern: Pattern, b: BrigadeId, c: RotaCell) => void;
+};
+
+/** Siatka jednego systemu zmianowego: brygady × dni, z liczbą osób z podanych linii. */
+function RotaGrid({ state, month, pattern, lineIds, norm, label, colorOf, onCycle }: GridProps) {
+  const days = monthDays(month);
+  const codes = patternShiftCodes(pattern);
+  const rows = useMemo(() => patternBrigades(pattern).map((b) => ({ b, cells: brigadeMonth(state, pattern.id, b, month) })), [state, pattern, month]);
+  const summary = useMemo(() => summarize(state, pattern.id, month), [state, pattern, month]);
+  const cycle = (b: BrigadeId, c: RotaCell) => onCycle(pattern, b, c);
+  const membersOf = (b: BrigadeId) => state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && lineIds.includes(w.lineId)).length;
+  /** Przy kilku podliniach: liczba osób brygady w każdej (Lutowanie 4 · Rdzenie 8 · Moduły 29). */
+  const byLine = (b: BrigadeId) =>
+    lineIds
+      .map((id) => ({ id, name: state.lines.find((l) => l.id === id)?.name ?? id, n: state.workers.filter((w) => w.active && w.patternId === pattern.id && w.brigade === b && w.lineId === id).length }))
+      .filter((x) => x.n > 0);
+  return (
+    <>
+        <div className="scroll-x">
+          <table style={{ minWidth: 40 * days.length + 220, tableLayout: 'fixed' }}>
+            <thead>
+              <tr>
+                <th className="sticky-col" style={{ width: 130 }}>{t('Brygada')}</th>
+                {days.map((d) => (
+                  <th key={d} title={holidayName(d) ?? ''} style={{ textAlign: 'center', width: 40, padding: '6px 2px', color: weekday(d) === 0 || holidayName(d) ? 'var(--red-ink)' : undefined }}>
+                    {t(WEEKDAY_SHORT[weekday(d)])}
+                    <br />
+                    {d.slice(8)}
+                  </th>
+                ))}
+                <th style={{ width: 150, textAlign: 'center' }} title={t('Wymiar czasu pracy w tym miesiącu: {h} h ({d} dni roboczych)', { h: norm.hours, d: norm.workdays })}>
+                  {t('Dni · godz. / wymiar')}
+                  <div className="sub" style={{ fontWeight: 400 }}>{t('wymiar')} {norm.hours} h</div>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(({ b, cells }) => {
+                const s = summary.find((x) => x.brigade === b)!;
+                return (
+                  <tr key={b}>
+                    <td className="sticky-col" style={{ fontWeight: 700 }}>
+                      <span className="dot" style={{ background: BRIGADE_COLOR[b], marginRight: 6 }} />
+                      {b}
+                      <div className="sub" style={{ fontWeight: 400 }} title={t('pracownicy w tym systemie na wszystkich liniach')}>{membersOf(b)} os.</div>
+                      {byLine(b).length > 1 &&
+                        byLine(b).map((x) => (
+                          <div key={x.id} className="sub" style={{ fontWeight: 400, whiteSpace: 'nowrap' }}>
+                            {x.name} · {x.n}
+                          </div>
+                        ))}
+                    </td>
+                    {cells.map((c) => {
+                      const cls =
+                        c.status === 'excluded'
+                          ? 'c-excluded'
+                          : c.status === 'trimmed'
+                            ? 'c-trimmed'
+                            : c.status === 'holiday'
+                              ? 'c-holiday'
+                              : c.status === 'off'
+                                ? 'c-W'
+                                : colorOf(c.code);
+                      const title =
+                        c.status === 'holiday'
+                          ? `${t('święto')}: ${t(holidayName(c.date) ?? '')}`
+                          : c.status === 'excluded'
+                          ? t('wyłączone (kalendarz zakładu)')
+                          : c.status === 'trimmed'
+                            ? t('dodatkowe wolne (cel dni)')
+                            : c.overridden
+                              ? t('zmienione ręcznie')
+                              : '';
+                      return (
+                        <td key={c.date} style={{ padding: '4px 2px' }}>
+                          <button type="button" className={`cell ${cls} ${c.overridden ? 'c-ov' : ''}`} title={`${c.date} ${label(c.code)} ${title}`} onClick={() => cycle(b, c)}>
+                            {c.status === 'excluded' ? '✕' : c.status === 'trimmed' ? t('w') : c.status === 'holiday' ? t('Ś') : label(c.code)}
+                          </button>
+                        </td>
+                      );
+                    })}
+                    <td style={{ textAlign: 'center', fontWeight: 600 }}>
+                      {s.days}
+                      {s.target !== undefined ? ` / ${s.target}` : ''} {t('dni')} · {s.hours} h
+                      <div>
+                        <span className={`tag ${s.hours < norm.hours ? 'red' : s.hours > norm.hours ? 'amber' : 'green'}`} title={s.hours < norm.hours ? t('Za mało godzin względem wymiaru — brakujące godziny trzeba dopełnić (np. na innej linii)') : s.hours > norm.hours ? t('Więcej godzin niż wymiar — nadgodziny albo odbiór dni wolnych') : t('Zgodnie z wymiarem')}>
+                          {s.hours === norm.hours ? '✓' : `${s.hours > norm.hours ? '+' : '−'}${Math.abs(s.hours - norm.hours)} h`}
+                        </span>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              <tr>
+                <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }}>{t('Luki')}</td>
+                {days.map((d) => {
+                  const g = gapsOnDay(state, pattern.id, d);
+                  return (
+                    <td key={d} style={{ textAlign: 'center', fontSize: 11, fontWeight: 700, color: 'var(--red-ink)', padding: '4px 2px' }} title={g.length ? t('Brak brygady na zmianie — obsadź 12 h, agencją lub nadgodzinami') : ''}>
+                      {g.map(label).join(' ')}
+                    </td>
+                  );
+                })}
+                <td />
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <div className="legend" style={{ marginTop: 12 }}>
+          {codes.map((c) => {
+            const def = state.shiftDefs.find((s) => s.code === c);
+            return (
+              <span key={c}>
+                <span className={`cell ${colorOf(c)}`}>{label(c)}</span>
+                {def ? fmtRange(def.start, def.hours) : c}
+                {def?.credit ? ` (+${def.credit} h ${t('należne, postój')})` : ''}
+              </span>
+            );
+          })}
+          <span><span className="cell c-W">{t('W')}</span>{t('wolne')}</span>
+          <span><span className="cell c-trimmed">{t('w')}</span>{t('dodatkowe wolne (cel dni)')}</span>
+          <span><span className="cell c-excluded">✕</span>{t('wyłączone')}</span>
+          <span><span className="cell c-holiday">{t('Ś')}</span>{t('święto ustawowe')}{holidaysOff(pattern) ? '' : ` (${t('ten system pracuje w święta')})`}</span>
+          <span><span className="cell c-W c-ov">{t('R')}</span>{t('zmiana ręczna')}</span>
+        </div>
+    </>
   );
 }
