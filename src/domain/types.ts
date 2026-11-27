@@ -95,6 +95,8 @@ export interface Worker {
   shiftHours?: number;
   /** stanowiska, które pracownik stale obsługuje razem ze swoim stanowiskiem */
   alsoStationIds?: string[];
+  /** pozostała pula urlopu wypoczynkowego w dniach (np. z systemu kadrowego), do planowania urlopów */
+  leaveDays?: number;
 }
 
 export type AbsenceReason = 'L4' | 'UW' | 'NN' | 'INNE';

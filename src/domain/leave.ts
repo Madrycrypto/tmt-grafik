@@ -1,0 +1,145 @@
+import { absenceOn, lineStatus, plannedShift } from './coverage';
+import { addDays, monthDays } from './dates';
+import { shiftDef } from './rota';
+import type { Absence, AppState, Worker } from './types';
+
+/** Czy pracownik ma na ten dzień urlop wypoczynkowy (UW). */
+export function hasLeave(state: AppState, workerId: string, date: string): boolean {
+  return absenceOn(state, workerId, date)?.reason === 'UW';
+}
+
+/**
+ * Włącza lub wyłącza urlop (UW) na jeden dzień. Wyłączenie dzieli szerszy zakres urlopu,
+ * zamiast kasować go w całości. Inne powody nieobecności (L4, NN) zostają nietknięte.
+ */
+export function setLeaveDay(abs: Absence[], workerId: string, date: string, on: boolean, newId: () => string): Absence[] {
+  const covers = (a: Absence) => a.workerId === workerId && a.reason === 'UW' && a.from <= date && date <= a.to;
+  if (on) {
+    if (abs.some(covers)) return abs;
+    return [...abs, { id: newId(), workerId, from: date, to: date, reason: 'UW' }];
+  }
+  const out: Absence[] = [];
+  for (const a of abs) {
+    if (!covers(a)) {
+      out.push(a);
+      continue;
+    }
+    if (a.from < date) out.push({ ...a, to: addDays(date, -1) });
+    if (date < a.to) out.push({ ...a, id: newId(), from: addDays(date, 1) });
+  }
+  return out;
+}
+
+/** Dni urlopu wypadające w dni pracy według grafiku (tylko te pomniejszają pulę). */
+export function leaveWorkDays(state: AppState, w: Worker, dates: string[]): number {
+  let n = 0;
+  for (const d of dates) if (hasLeave(state, w.id, d) && plannedShift(state, w, d)) n++;
+  return n;
+}
+
+export interface LeaveBalance {
+  /** pula przed planem; undefined = nie wpisano */
+  pool: number | undefined;
+  planned: number;
+  left: number | undefined;
+}
+
+export function leaveBalance(state: AppState, w: Worker, month: string): LeaveBalance {
+  const planned = leaveWorkDays(state, w, monthDays(month));
+  return { pool: w.leaveDays, planned, left: w.leaveDays === undefined ? undefined : w.leaveDays - planned };
+}
+
+export interface DayLoad {
+  date: string;
+  /** osoby na urlopie w dniu, w którym miały pracować */
+  onLeave: number;
+  /** stanowiska bez wymaganej obsady kwalifikowanej, zsumowane po liniach i zmianach tego dnia */
+  gaps: number;
+}
+
+/** Skutki urlopów dla obsady: dla każdego dnia liczba urlopów i luk na stanowiskach. */
+export function leaveLoad(state: AppState, dates: string[], lineIds: string[]): DayLoad[] {
+  return dates.map((date) => {
+    let onLeave = 0;
+    let gaps = 0;
+    for (const lineId of lineIds) {
+      const codes = new Set<string>();
+      for (const w of state.workers) {
+        if (!w.active || w.lineId !== lineId) continue;
+        const sh = plannedShift(state, w, date);
+        if (!sh) continue;
+        if (sh.code) codes.add(sh.code);
+        if (hasLeave(state, w.id, date)) onLeave++;
+      }
+      for (const code of codes) {
+        const def = shiftDef(state, code);
+        if (!def) continue;
+        gaps += lineStatus(state, lineId, date, { start: def.start, end: def.start + def.hours }).statuses.filter((s) => !s.ok).length;
+      }
+    }
+    return { date, onLeave, gaps };
+  });
+}
+
+const fold = (s: string) =>
+  s
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/ł/gi, 'l')
+    .toLowerCase()
+    .replace(/[^a-z0-9一-鿿 ]+/g, ' ')
+    .split(' ')
+    .filter(Boolean)
+    .sort()
+    .join(' ');
+
+export interface LeaveImport {
+  /** dopasowani pracownicy i dni z literą U */
+  matched: { workerId: string; name: string; dates: string[] }[];
+  unmatched: string[];
+  /** dni z U, których nie ma w grafiku pracownika (np. wolne) — i tak zostaną wpisane jako urlop */
+  days: number;
+}
+
+/**
+ * Czyta arkusz wklejony z Excela: wiersz nagłówka z datami (m/d/rrrr lub rrrr-mm-dd),
+ * dalej wiersze „lp, imię i nazwisko, stanowisko, komórki”. Komórka „U” = urlop w tym dniu.
+ * Kolejność imienia i nazwiska nie ma znaczenia, a polskie znaki są pomijane przy dopasowaniu.
+ */
+export function parseLeaveSheet(text: string, workers: Worker[]): LeaveImport {
+  const rows = text.split(/\r?\n/).map((r) => r.split('\t'));
+  const iso = (c: string): string | null => {
+    const v = c.trim();
+    let m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v);
+    if (m) return v;
+    m = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/.exec(v);
+    if (m) return `${m[3]}-${m[1].padStart(2, '0')}-${m[2].padStart(2, '0')}`;
+    m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(v);
+    if (m) return `${m[3]}-${m[2].padStart(2, '0')}-${m[1].padStart(2, '0')}`;
+    return null;
+  };
+  const head = rows.find((r) => r.filter((c) => iso(c)).length >= 5);
+  if (!head) return { matched: [], unmatched: [], days: 0 };
+  const dateAt = head.map((c) => iso(c));
+  const byName = new Map<string, Worker>();
+  for (const w of workers) byName.set(fold(w.name), w);
+  const matched: LeaveImport['matched'] = [];
+  const unmatched: string[] = [];
+  let days = 0;
+  for (const r of rows) {
+    if (r === head) continue;
+    const dates = r.flatMap((c, i) => (dateAt[i] && c.trim().toUpperCase() === 'U' ? [dateAt[i] as string] : []));
+    const nameCell = r.slice(0, 4).find((c) => /[A-Za-zÀ-ɏ一-鿿]{2,}/.test(c) && !/^(A|B|C|D)\s+\w+$/.test(c.trim()) && !/^\d+$/.test(c.trim()));
+    if (!nameCell) continue;
+    const w = byName.get(fold(nameCell));
+    if (!w) {
+      if (dates.length) unmatched.push(nameCell.trim());
+      continue;
+    }
+    if (dates.length) {
+      matched.push({ workerId: w.id, name: w.name, dates });
+      days += dates.length;
+    }
+  }
+  return { matched, unmatched, days };
+}

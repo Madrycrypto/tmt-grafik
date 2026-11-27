@@ -16,6 +16,7 @@ import Ustawienia from './pages/Ustawienia';
 import Kiosk from './pages/Kiosk';
 import Rcp from './pages/Rcp';
 import Statystyki from './pages/Statystyki';
+import Urlopy from './pages/Urlopy';
 import Wiadomosci from './pages/Wiadomosci';
 import './index.css';
 
@@ -46,6 +47,7 @@ function Root() {
             <Route path="pracownicy" element={<Pracownicy />} />
             <Route path="linie" element={<Linie />} />
             <Route path="statystyki" element={<Statystyki />} />
+            <Route path="urlopy" element={<Urlopy />} />
             <Route path="rcp" element={<Rcp />} />
             <Route path="wiadomosci" element={<Wiadomosci />} />
             <Route path="historia" element={<Historia />} />
