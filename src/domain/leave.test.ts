@@ -36,7 +36,7 @@ describe('urlopy', () => {
     s.absences = setLeaveDay(s.absences, w.id, work, true, ids());
     s.absences = setLeaveDay(s.absences, w.id, off, true, ids());
     expect(hasLeave(s, w.id, off)).toBe(true);
-    expect(leaveBalance(s, w, m)).toEqual({ pool: 10, planned: 1, left: 9 });
+    expect(leaveBalance(s, w, m)).toEqual({ pool: 10, planned: 1, left: 9, plannable: 9 });
     w.leaveDays = undefined;
     expect(leaveBalance(s, w, m).left).toBeUndefined();
   });
@@ -86,6 +86,21 @@ describe('urlopy: cały rok', () => {
     expect(year.planned).toBe(months.reduce((a, b) => a + b, 0));
     expect(year.planned).toBeGreaterThan(leaveBalance(s, w, '2026-03').planned);
     expect(year.left).toBe(26 - year.planned);
+  });
+  it('cztery dni na żądanie zostają poza planem do listopada, w grudniu się zwalniają', () => {
+    const s = demoState();
+    const w = s.workers.find((x) => x.active)!;
+    w.leaveDays = 10;
+    const wd = (m: string, n: number) => monthDays(m).filter((d) => plannedShift(s, w, d)).slice(0, n);
+    s.absences = [];
+    for (const d of wd('2026-03', 5)) s.absences = setLeaveDay(s.absences, w.id, d, true, ids());
+    expect(leaveBalance(s, w, '2026').plannable).toBe(1);
+    for (const d of wd('2026-12', 3)) s.absences = setLeaveDay(s.absences, w.id, d, true, ids());
+    const b = leaveBalance(s, w, '2026');
+    expect(b.plannable).toBe(1);
+    expect(b.left).toBe(2);
+    for (const d of wd('2026-06', 3)) s.absences = setLeaveDay(s.absences, w.id, d, true, ids());
+    expect(leaveBalance(s, w, '2026').plannable).toBe(-2);
   });
   it('liczy dni urlopu w miesiącu tylko dla wybranych osób i tylko UW', () => {
     const s = demoState();

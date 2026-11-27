@@ -164,6 +164,7 @@ type GridProps = {
 /** Tabela urlopów: dni w kolumnach, „U” w komórce. W miesiącu pula i wynik są z prawej, w roku z lewej (kolumna „Zostanie” przykleja się do nazw). */
 function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggle: toggle, onPool: setPool }: GridProps) {
   const yearMode = period.length === 4;
+  const year = period.slice(0, 4);
   const days = useMemo(() => periodDays(period), [period]);
   const load = useMemo(() => leaveLoad(state, days, lines), [state, days, lines]);
   const dayW = yearMode ? 30 : 34;
@@ -185,16 +186,15 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
     <input className="input" type="number" min={0} style={{ width: 58, padding: '2px 4px', textAlign: 'center' }} value={pool ?? ''} disabled={!canEdit} onChange={(e) => setPool(w.id, e.target.value)} />
   );
   const leftTag = (left: number | undefined) => (left === undefined ? '—' : <span className={`tag ${left < 0 ? 'red' : left <= 2 ? 'amber' : 'green'}`}>{left}</span>);
-  const colspanTail = yearMode ? 0 : 3;
   return (
     <section className="card">
       <div className="scroll-x" ref={box}>
-        <table style={{ minWidth: dayW * days.length + 420 + (yearMode ? 90 : 0), tableLayout: 'fixed' }}>
+        <table style={{ minWidth: dayW * days.length + 420 + 90, tableLayout: 'fixed' }}>
           <thead>
             {yearMode && (
               <tr>
                 <th className="sticky-col" style={{ width: nameCol }} />
-                <th style={{ ...stickyLeft, width: 80, zIndex: 2 }} />
+                <th style={{ ...stickyLeft, width: 96, zIndex: 2 }} />
                 <th colSpan={3} />
                 {months.map((m, k) => (
                   <th key={m.key} colSpan={monthDays(m.key).length} style={{ textAlign: 'left', padding: '6px 6px', borderLeft: '2px solid var(--line)' }}>
@@ -205,9 +205,9 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
             )}
             <tr>
               <th className="sticky-col" style={{ width: nameCol }}>{t('Pracownik')}</th>
-              {yearMode && <th style={{ ...stickyLeft, width: 80, textAlign: 'center', zIndex: 2 }}>{t('Zostanie')}</th>}
-              {yearMode && <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>}
-              {yearMode && <th style={{ width: 70, textAlign: 'center' }}>{t('UW w roku')}</th>}
+              <th style={{ ...stickyLeft, width: 96, textAlign: 'center', zIndex: 2 }} title={t('Zostanie z puli po wszystkich zaplanowanych urlopach; pod spodem ile można zaplanować do listopada (4 dni zostają na żądanie)')}>{t('Zostanie')}</th>
+              <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>
+              <th style={{ width: 70, textAlign: 'center' }}>{t('UW w roku')}</th>
               <th style={{ width: 54 }}>{t('Brygada')}</th>
               {days.map((d) => (
                 <th
@@ -220,18 +220,11 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
                   {d.slice(8)}
                 </th>
               ))}
-              {!yearMode && (
-                <>
-                  <th style={{ width: 70, textAlign: 'center' }} title={t('Pozostała pula urlopu w dniach (wpisz z systemu kadrowego)')}>{t('Pula (dni)')}</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>{t('Plan UW')}</th>
-                  <th style={{ width: 70, textAlign: 'center' }}>{t('Zostanie')}</th>
-                </>
-              )}
             </tr>
           </thead>
           <tbody>
             {workers.map((w, i) => {
-              const bal = leaveBalance(state, w, period);
+              const bal = leaveBalance(state, w, year);
               const newLine = i === 0 || workers[i - 1].lineId !== w.lineId;
               return (
                 <tr key={w.id} style={newLine ? { borderTop: '2px solid var(--line)' } : undefined}>
@@ -239,9 +232,16 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
                     {w.name}
                     {newLine && <div className="sub" style={{ fontWeight: 400 }}>{lineName(w.lineId)}</div>}
                   </td>
-                  {yearMode && <td style={{ ...stickyLeft, textAlign: 'center' }}>{leftTag(bal.left)}</td>}
-                  {yearMode && <td style={{ textAlign: 'center' }}>{poolInput(w, bal.pool)}</td>}
-                  {yearMode && <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>}
+                  <td style={{ ...stickyLeft, textAlign: 'center', lineHeight: 1.2 }}>
+                    {leftTag(bal.left)}
+                    {bal.plannable !== undefined && (
+                      <div className="sub" style={{ color: bal.plannable < 0 ? 'var(--red-ink)' : undefined, fontSize: 11 }} title={t('Do listopada można zaplanować tyle dni; 4 dni zostają na żądanie i zwalniają się w grudniu')}>
+                        {bal.plannable < 0 ? `${t('przekroczone o')} ${-bal.plannable}` : `${t('do XI')}: ${bal.plannable}`}
+                      </div>
+                    )}
+                  </td>
+                  <td style={{ textAlign: 'center' }}>{poolInput(w, bal.pool)}</td>
+                  <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>
                   <td>{w.brigade}</td>
                   {days.map((d) => {
                     const sh = plannedShift(state, w, d);
@@ -270,47 +270,38 @@ function Grid({ state, period, workers, lines, limit, canEdit, lineName, onToggl
                       </td>
                     );
                   })}
-                  {!yearMode && (
-                    <>
-                      <td style={{ textAlign: 'center' }}>{poolInput(w, bal.pool)}</td>
-                      <td style={{ textAlign: 'center', fontWeight: 600 }}>{bal.planned || '—'}</td>
-                      <td style={{ textAlign: 'center' }}>{leftTag(bal.left)}</td>
-                    </>
-                  )}
                 </tr>
               );
             })}
             <tr style={{ borderTop: '2px solid var(--line)' }}>
               <td className="sticky-col" style={{ fontWeight: 700 }}>{t('Urlopy w dniu')}</td>
-              {yearMode && <td style={stickyLeft} />}
-              {yearMode && <td colSpan={2} />}
+              <td style={stickyLeft} />
+              <td colSpan={2} />
               <td />
               {load.map((x) => (
                 <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: limit !== undefined && x.onLeave > limit ? 'var(--red-ink)' : undefined, background: limit !== undefined && x.onLeave > limit ? 'var(--red-bg, #fde2e2)' : isOffDay(x.date) ? OFF_TINT : undefined }}>
                   {x.onLeave || ''}
                 </td>
               ))}
-              {colspanTail > 0 && <td colSpan={colspanTail} />}
             </tr>
             <tr>
               <td className="sticky-col" style={{ fontWeight: 700, color: 'var(--red-ink)' }} title={t('Stanowiska bez wymaganej obsady kwalifikowanej po odjęciu urlopów')}>
                 {t('Luki na stanowiskach')}
               </td>
-              {yearMode && <td style={stickyLeft} />}
-              {yearMode && <td colSpan={2} />}
+              <td style={stickyLeft} />
+              <td colSpan={2} />
               <td />
               {load.map((x) => (
                 <td key={x.date} style={{ textAlign: 'center', fontWeight: 700, fontSize: 12, color: 'var(--red-ink)', background: isOffDay(x.date) ? OFF_TINT : undefined }}>
                   {x.gaps || ''}
                 </td>
               ))}
-              {colspanTail > 0 && <td colSpan={colspanTail} />}
             </tr>
           </tbody>
         </table>
       </div>
       <div className="sub" style={{ marginTop: 8 }}>
-        {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i wynik po urlopach z prawej.')}
+        {t('Luki liczą się razem z innymi nieobecnościami. Wzór: ten sam układ co w arkuszu urlopowym — dni w kolumnach, „U” w komórce, pula i saldo zawsze z lewej. Cztery dni z puli zostają na żądanie i zwalniają się w grudniu.')}
       </div>
     </section>
   );

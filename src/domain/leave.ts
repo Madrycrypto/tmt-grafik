@@ -37,16 +37,27 @@ export function leaveWorkDays(state: AppState, w: Worker, dates: string[]): numb
   return n;
 }
 
+/** Urlop na żądanie: tyle dni z puli zostaje poza planem, aż do grudnia. */
+export const ON_DEMAND_DAYS = 4;
+
 export interface LeaveBalance {
   /** pula przed planem; undefined = nie wpisano */
   pool: number | undefined;
   planned: number;
   left: number | undefined;
+  /** ile jeszcze można zaplanować do listopada (pula minus plan minus dni na żądanie); w grudniu rezerwa się zwalnia */
+  plannable: number | undefined;
 }
 
 export function leaveBalance(state: AppState, w: Worker, period: string): LeaveBalance {
   const planned = leaveWorkDays(state, w, periodDays(period));
-  return { pool: w.leaveDays, planned, left: w.leaveDays === undefined ? undefined : w.leaveDays - planned };
+  const left = w.leaveDays === undefined ? undefined : w.leaveDays - planned;
+  const decStart = period.length === 4 ? `${period}-12-01` : undefined;
+  const reserve = decStart ? ON_DEMAND_DAYS : 0;
+  // plan z grudnia może korzystać z rezerwy, więc do limitu „do listopada” liczy się tylko plan sprzed grudnia
+  const beforeDec = decStart ? leaveWorkDays(state, w, periodDays(period).filter((d) => d < decStart)) : planned;
+  const plannable = w.leaveDays === undefined ? undefined : Math.max(w.leaveDays - reserve, 0) - beforeDec;
+  return { pool: w.leaveDays, planned, left, plannable };
 }
 
 export interface DayLoad {
