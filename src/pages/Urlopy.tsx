@@ -161,6 +161,8 @@ function ReportsPanel() {
   const nameOf = (id: string) => state.workers.find((w) => w.id === id)?.name ?? id;
   const done = async (id: string, status: ReportStatus, note?: string) => {
     await backend.client?.from('leave_reports').update({ status, resolved_note: note ?? null, resolved_at: new Date().toISOString() }).eq('id', id);
+    // odrzucenie nie zmienia grafiku, więc pracownik dostaje osobny push; błąd wysyłki nie cofa decyzji
+    if (status === 'rejected') void backend.client?.functions.invoke('tmt-leave-notify', { body: { id } }).catch(() => undefined);
     await reload();
   };
   const resolve = (r: (typeof pending)[number], mode: 'planned' | 'from-plan' | 'on-demand', planDate?: string) => {
