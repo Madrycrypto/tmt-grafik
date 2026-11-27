@@ -1,4 +1,4 @@
-import { NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet } from 'react-router-dom';
 import { useApp } from './data/AppContext';
 import { Icon, LangSwitch, ThemeSwitch, usePersistent } from './ui';
 import { t } from './i18n';
@@ -59,10 +59,10 @@ export default function Layout() {
       <aside className={`sidebar ${mini ? 'mini' : ''}`} aria-label={t('Menu główne')}>
         <div className="side-head">
           {!mini && (
-            <div>
+            <Link to="/grafik" title={t('Grafik brygad')} style={{ color: 'inherit', textDecoration: 'none' }}>
               <div className="brand">{t('TMT Grafik')}</div>
               <div className="brand-sub">{t('Brygady · Matrix · Zastępstwa')}</div>
-            </div>
+            </Link>
           )}
           <button
             type="button"
@@ -94,7 +94,9 @@ export default function Layout() {
         </div>
       </aside>
       <header className="mobile-top">
-        <strong style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{t('TMT Grafik')}</strong>
+        <Link to="/grafik" style={{ color: 'inherit', textDecoration: 'none' }}>
+          <strong style={{ fontFamily: "'Space Grotesk', sans-serif" }}>{t('TMT Grafik')}</strong>
+        </Link>
         <span style={{ display: 'inline-flex', gap: 10, alignItems: 'center' }}>
           <UndoButtons dark compact />
           <SyncBadge dark />
