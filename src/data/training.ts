@@ -87,7 +87,7 @@ export async function removeTraining(db: SupabaseClient, r: TrainingRecord): Pro
 }
 
 /** Krótko żyjący link do skanu (magazyn jest prywatny). */
-export async function scanUrl(db: SupabaseClient, path: string): Promise<string | null> {
-  const { data } = await db.storage.from(BUCKET).createSignedUrl(path, 120);
+export async function scanUrl(db: SupabaseClient, path: string, seconds = 120): Promise<string | null> {
+  const { data } = await db.storage.from(BUCKET).createSignedUrl(path, seconds);
   return data?.signedUrl ?? null;
 }

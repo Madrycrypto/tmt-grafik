@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react';
 import { fmtDate, todayIso } from '../domain/dates';
 import { level as skillLevel } from '../domain/coverage';
 import { hasDoc } from '../domain/training';
+import { trainingReportHtml } from '../domain/trainingReport';
 import type { TrainingRecord } from '../domain/training';
 import type { Worker } from '../domain/types';
 import { addTraining, removeTraining, scanUrl, useTraining } from '../data/training';
@@ -40,10 +41,45 @@ export function TrainingCard({ worker }: { worker: Worker }) {
     toast(t('Usunięto wpis szkolenia.'));
   };
 
+  const exportPdf = async () => {
+    const win = window.open('', '_blank');
+    if (!win) {
+      toast(t('Przeglądarka zablokowała nowe okno. Zezwól na wyskakujące okna dla tej strony.'), { tone: 'warn' });
+      return;
+    }
+    win.document.write(`<p style="font-family:sans-serif">${t('Przygotowuję kartę…')}</p>`);
+    // skany obrazkowe trafiają na kolejne strony; PDF-y zostają w systemie (link ważny krótko, więc osadzamy tylko obrazy)
+    const imageUrls: Record<string, string> = {};
+    await Promise.all(
+      mine
+        .filter((r) => r.file_path && !r.file_path.endsWith('.pdf'))
+        .map(async (r) => {
+          const u = await scanUrl(db, r.file_path!, 900);
+          if (u) imageUrls[r.id] = u;
+        }),
+    );
+    const line = state.lines.find((l) => l.id === worker.lineId);
+    const html = trainingReportHtml({
+      workerName: worker.name,
+      lineText: [line?.group, line?.name].filter(Boolean).join(' · '),
+      brigade: worker.brigade,
+      generated: new Date().toLocaleDateString('pl-PL'),
+      stations: stationIds.map((id) => ({ id, name: stationName(id), level: skillLevel(worker, id) })),
+      records: mine,
+      imageUrls,
+    });
+    win.document.open();
+    win.document.write(html);
+    win.document.close();
+  };
+
   return (
     <section className="card stack">
       <div className="row" style={{ justifyContent: 'space-between' }}>
         <h3 style={{ margin: 0 }}>{t('Karta szkoleń')}</h3>
+        <button type="button" className="btn small" onClick={() => void exportPdf()} title={t('Otwiera wydruk — wybierz „Zapisz jako PDF”')}>
+          ⬇ {t('Eksport PDF')}
+        </button>
         {canEdit && (
           <button type="button" className="btn small" onClick={() => setAdding({ stationId: stationIds[0] ?? state.stations[0]?.id ?? '', level: 1 })}>
             + {t('Dodaj szkolenie')}
