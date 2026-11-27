@@ -15,6 +15,7 @@ import Pracownicy from './pages/Pracownicy';
 import Ustawienia from './pages/Ustawienia';
 import Kiosk from './pages/Kiosk';
 import Rcp from './pages/Rcp';
+import Statystyki from './pages/Statystyki';
 import Wiadomosci from './pages/Wiadomosci';
 import './index.css';
 
@@ -44,6 +45,7 @@ function Root() {
             <Route path="matrix" element={<Matrix />} />
             <Route path="pracownicy" element={<Pracownicy />} />
             <Route path="linie" element={<Linie />} />
+            <Route path="statystyki" element={<Statystyki />} />
             <Route path="rcp" element={<Rcp />} />
             <Route path="wiadomosci" element={<Wiadomosci />} />
             <Route path="historia" element={<Historia />} />
