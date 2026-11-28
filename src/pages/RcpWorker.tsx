@@ -1,11 +1,13 @@
 import { useMemo, useState } from 'react';
 import { addDays, fmtDate, monthDays, periodDays, todayIso, weekday } from '../domain/dates';
-import { accountPeriod, fmtHM, sumDays } from '../domain/rcpAccount';
+import { accountCsv, accountPeriod, fmtHM, sumDays } from '../domain/rcpAccount';
 import type { DayAccount } from '../domain/rcpAccount';
 import { DIR_LABEL, checkDay, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { Punch } from '../domain/punches';
 import { deletePunch, savePunch, usePunches } from '../data/punches';
 import { useApp } from '../data/AppContext';
+import { useMonthLocks } from '../data/locks';
+import { downloadCsv } from './WorkerBulk';
 import { toast } from '../toast';
 import { t } from '../i18n';
 import { Sheet, usePersistent } from '../ui';
@@ -27,7 +29,8 @@ const hh = (h: number | undefined) => (h === undefined ? '—' : fmtMin(Math.rou
 
 /** Rozliczenie pracownika z odbić RCP: tydzień, miesiąc, rok, z korektą ręczną. To kontrola — płace liczy Comarch. */
 export function RcpWorker({ workerId, date, onClose }: { workerId: string; date: string; onClose: () => void }) {
-  const { state, canEdit } = useApp();
+  const { state, canEdit: mayEdit, role } = useApp();
+  const { locked, lock, unlock } = useMonthLocks();
   const worker = state.workers.find((w) => w.id === workerId);
   const [view, setView] = usePersistent<View>('rcp-settle-view', 'month');
   const [anchor, setAnchor] = useState(date);
@@ -50,6 +53,18 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
   const days = useMemo(() => (worker ? accountPeriod(state, worker, dates, punches, today, hour) : []), [state, worker, dates, punches, today, hour]);
   const totals = useMemo(() => sumDays(days), [days]);
   if (!worker) return null;
+  const month = anchor.slice(0, 7);
+  const isLocked = locked.has(month);
+  const canEdit = mayEdit;
+  const dayLocked = (d: string) => locked.has(d.slice(0, 7));
+  const setLock = async (on: boolean) => {
+    try {
+      await (on ? lock(month) : unlock(month));
+      toast(on ? t('Miesiąc zamknięty') : t('Miesiąc otwarty'));
+    } catch {
+      toast(t('Nie udało się zapisać'));
+    }
+  };
 
   const step = (n: number) => {
     if (view === 'week') setAnchor(addDays(anchor, 7 * n));
@@ -81,6 +96,15 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
           </div>
           <button type="button" className="btn small ghost" onClick={() => setCard(true)}>{t('Karta pracownika')}</button>
         </div>
+          {view !== 'week' && (
+            <div className="row" style={{ gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+              <button type="button" className="btn small" onClick={() => downloadCsv(`rozliczenie-${worker.name.replace(/\s+/g, '-')}-${view === 'year' ? anchor.slice(0, 4) : month}.csv`, accountCsv(worker.name, days))}>
+                {t('Eksport CSV')}
+              </button>
+              {view === 'month' && isLocked && <span className="tag">🔒 {t('Miesiąc zamknięty')}</span>}
+              {view === 'month' && canEdit && !isLocked && (
+                <button type="button" className="btn small" onClick={() => void setLock(true)}>{t('Zamknij miesiąc')}</button>
+              )}
 
         <section className="kpis" aria-label={t('Podsumowanie')}>
           <div className="kpi"><div className="k">{t('Przepracowane dni')}</div><div className="v">{totals.workDays}</div></div>
@@ -149,7 +173,7 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
               </thead>
               <tbody>
                 {days.map((d) => (
-                  <DayRow key={d.date} d={d} canEdit={canEdit} onEdit={() => setEditDay(d.date)} />
+                  <DayRow key={d.date} d={d} canEdit={canEdit && !dayLocked(d.date)} locked={dayLocked(d.date)} onEdit={() => setEditDay(d.date)} />
                 ))}
               </tbody>
             </table>
@@ -158,6 +182,11 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
         <div className="sub">
           {t('Liczymy od początku zmiany: wejście wcześniej się nie liczy. Spóźnienie i wyjście do 5 min nie obniżają czasu, a zostanie dłużej niż 5 min to nadgodziny. To podgląd kontrolny, oficjalne rozliczenie jest w Comarch TNA.')}
         </div>
+          {view === 'month' && isLocked && role === 'admin' && (
+            <button type="button" className="btn small" onClick={() => void setLock(false)}>{t('Otwórz miesiąc')}</button>
+          )}
+        </div>
+      )}
       </div>
       {editDay && <DayEditor worker={worker} date={editDay} punches={punches} onClose={() => setEditDay(null)} onChanged={() => void reload()} />}
       {card && <WorkerEditor workerId={worker.id} onClose={() => setCard(false)} />}
@@ -165,7 +194,7 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
   );
 }
 
-function DayRow({ d, canEdit, onEdit }: { d: DayAccount; canEdit: boolean; onEdit: () => void }) {
+function DayRow({ d, canEdit, locked, onEdit }: { d: DayAccount; canEdit: boolean; locked?: boolean; onEdit: () => void }) {
   const c = d.check;
   const idle = c.status === 'off' && !c.punches.length;
   const dim = idle ? { opacity: 0.55 } : undefined;
@@ -198,6 +227,7 @@ function DayRow({ d, canEdit, onEdit }: { d: DayAccount; canEdit: boolean; onEdi
       <td>{d.workedMin ? fmtHM(d.workedMin) : '—'}</td>
       <td style={{ color: d.balanceMin < 0 ? 'var(--red-ink)' : d.balanceMin > 0 ? 'var(--green-ink, #14532d)' : undefined, fontWeight: 600 }}>{d.balanceMin ? fmtHM(d.balanceMin, true) : '—'}</td>
       <td>
+        {locked && <span title={t('Miesiąc zamknięty')}>🔒</span>}
         {canEdit && (
           <button type="button" className="btn small ghost" aria-label={t('Popraw odbicia')} title={t('Popraw odbicia tego dnia')} onClick={onEdit}>
             ⋮

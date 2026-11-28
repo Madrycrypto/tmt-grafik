@@ -116,3 +116,17 @@ export function fmtHM(min: number, signed = false): string {
   return min > 0 ? `+${s}` : min < 0 ? `−${s}` : s;
 }
 
+
+const csvCell = (v: string | number) => `"${String(v).replace(/"/g, '""')}"`;
+
+/** CSV do porównania z Comarch TNA: jeden wiersz na dzień, godziny jako minuty i h:mm. */
+export function accountCsv(name: string, days: DayAccount[]): string {
+  const hm = (m: number) => `${m < 0 ? '-' : ''}${Math.floor(Math.abs(m) / 60)}:${String(Math.abs(m) % 60).padStart(2, '0')}`;
+  const head = ['Pracownik', 'Data', 'Wejście', 'Wyjście', 'Plan', 'Przepracowane', 'Bilans', 'Do poprawy'];
+  const rows = days.map((d) => {
+    const c = d.check;
+    const f = (h: number | undefined) => (h === undefined ? '' : `${String(Math.floor(h)).padStart(2, '0')}:${String(Math.round((h % 1) * 60)).padStart(2, '0')}`);
+    return [name, d.date, f(c.firstIn), f(c.lastOut), hm(d.planMin), hm(d.workedMin), hm(d.balanceMin), d.problem ? 'tak' : ''];
+  });
+  return '﻿' + [head, ...rows].map((r) => r.map(csvCell).join(';')).join('\r\n');
+}

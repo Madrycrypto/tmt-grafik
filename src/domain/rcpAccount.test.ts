@@ -3,7 +3,7 @@ import { plannedShift } from './coverage';
 import { addDays } from './dates';
 import type { Punch } from './punches';
 import { rotaCell } from './rota';
-import { accountDay, accountPeriod, fmtHM, sumDays } from './rcpAccount';
+import { accountCsv, accountDay, accountPeriod, fmtHM, sumDays } from './rcpAccount';
 import { emptyState } from './seed';
 import type { AppState, Worker } from './types';
 import { BRIGADES } from './types';
@@ -82,5 +82,19 @@ describe('rozliczenie dnia RCP', () => {
   it('formatuje czas ze znakiem', () => {
     expect(fmtHM(-34 * 60 - 12, true)).toBe('−34 h 12 min');
     expect(fmtHM(125, true)).toBe('+2 h 05 min');
+  });
+});
+
+describe('accountCsv', () => {
+  it('daje wiersz na dzień z godzinami i oznaczeniem dni do poprawy', () => {
+    const { s, w, day, start } = setup();
+    const full = accountPeriod(s, w, [day], [punch(day, start - 0.5, 'in'), punch(day, start + 8, 'out')], addDays(day, 5), 12);
+    const csv = accountCsv('Jan "J" Kowalski', full);
+    const lines = csv.replace('﻿', '').split('\r\n');
+    expect(lines).toHaveLength(2);
+    expect(lines[1]).toContain('"Jan ""J"" Kowalski";"' + day + '"');
+    expect(lines[1]).toContain('"06:30"');
+    const bad = accountCsv('Jan', accountPeriod(s, w, [day], [punch(day, start, 'in')], addDays(day, 5), 12));
+    expect(bad.trim().endsWith('"tak"')).toBe(true);
   });
 });
