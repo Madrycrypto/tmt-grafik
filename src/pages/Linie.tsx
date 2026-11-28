@@ -24,13 +24,14 @@ export default function Linie() {
   const groups = [...state.lines]
     .sort((a, b) => a.name.localeCompare(b.name))
     .reduce<[string, typeof state.lines][]>((acc, l) => {
-      const g = l.group ?? '';
+      // linia główna bez grupy (np. Injection) ma własny nagłówek zamiast „Pozostałe linie”
+      const g = l.group ?? `~${l.id}`;
       const hit = acc.find((x) => x[0] === g);
       if (hit) hit[1].push(l);
       else acc.push([g, [l]]);
       return acc;
     }, [])
-    .sort((a, b) => (a[0] ? 0 : 1) - (b[0] ? 0 : 1) || a[0].localeCompare(b[0]));
+    .sort((a, b) => Number(a[0].startsWith('~')) - Number(b[0].startsWith('~')) || a[0].localeCompare(b[0]));
   const [open, setOpen] = usePersistent('linie-open', groups[0]?.[0] ?? '');
 
   return (
@@ -59,9 +60,9 @@ export default function Linie() {
           <section key={g} className="stack">
             <button type="button" className="group-head" aria-expanded={isOpen} onClick={() => setOpen(isOpen ? '' : g)}>
               <span className="chev">{isOpen ? '▾' : '▸'}</span>
-              <h2>{g || t('Pozostałe linie')}</h2>
+              <h2>{g.startsWith('~') ? lines[0].name : g}</h2>
               <span className="sub">
-                {lines.map((l) => l.name).join(', ')} · {people} {t('os.')}
+                {g.startsWith('~') ? '' : `${lines.map((l) => l.name).join(', ')} · `}{people} {t('os.')}
               </span>
             </button>
             {isOpen && lines.map((l) => <LineCard key={l.id} lineId={l.id} />)}
