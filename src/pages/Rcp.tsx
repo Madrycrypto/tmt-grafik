@@ -221,7 +221,7 @@ export default function Rcp() {
         {error && <div className="note red">{error}</div>}
         {shown.length === 0 && <div className="sub">{t('Nikt nie jest zaplanowany ani nie odbił się tego dnia.')}</div>}
         <div className="scroll-x">
-          <table style={{ minWidth: 760 }}>
+          <table className="tbl-cards" style={{ minWidth: 760 }}>
             <thead>
               <tr>
                 <th>{t('Pracownik')}</th>
@@ -236,25 +236,25 @@ export default function Rcp() {
             <tbody>
               {shown.map((r) => (
                 <tr key={r.worker.id}>
-                  <td>
+                  <td className="full">
                     <button type="button" className="link-btn" onClick={() => setOpenWorker(r.worker.id)}>{r.worker.name}</button> <TypeTag w={r.worker} />
                     <div className="sub">{t('bryg.')} {r.worker.brigade} · {state.lines.find((l) => l.id === r.worker.lineId)?.name}</div>
                   </td>
-                  <td>{r.plan ? fmtRange(r.plan.start, r.plan.end - r.plan.start) : '—'}</td>
-                  <td style={{ color: r.lateMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.firstIn)}</td>
-                  <td style={{ color: r.earlyMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.lastOut)}</td>
-                  <td>
+                  <td data-l={t('Plan')}>{r.plan ? fmtRange(r.plan.start, r.plan.end - r.plan.start) : '—'}</td>
+                  <td data-l={t('Wejście')} style={{ color: r.lateMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.firstIn)}</td>
+                  <td data-l={t('Wyjście')} style={{ color: r.earlyMin ? 'var(--amber-ink)' : undefined }}>{hourText(r.lastOut)}</td>
+                  <td data-l={t('Czas')}>
                     {r.worked ? `${Math.floor(r.worked)} h ${String(Math.round((r.worked % 1) * 60)).padStart(2, '0')} min` : '—'}
                     {r.privateMin > 0 && <div className="sub" style={{ color: 'var(--amber-ink)' }}>{t('prywatne')} −{r.privateMin} min</div>}
                   </td>
-                  <td>
+                  <td data-l={t('Status')} className="full">
                     <span className={`tag ${STATUS_TONE[r.status]}`}>
                       {r.absence ? t(r.absence.reason) : t(STATUS_LABEL[r.status])}
                       {r.lateMin ? ` +${r.lateMin} min` : ''}
                       {r.earlyMin ? ` −${r.earlyMin} min` : ''}
                     </span>
                   </td>
-                  <td>
+                  <td data-l={t('Odbicia')} className="full">
                     <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                       {r.punches.map((p) => (
                         <span key={p.id} className={`tag ${p.dir === 'private_out' ? 'amber' : ''}`} title={`${t(DIR_LABEL[p.ret ? 'return' : p.dir])} · ${p.source === 'manual' ? t('dodane ręcznie') : p.source === 'plan' ? t('zatwierdzone wg grafiku') : p.source === 'badge' ? t('karta RCP') : p.source === 'tna' ? t('czytnik Comarch TNA') : `${t('kiosk')}: ${p.kiosk ?? ''}`}`}>

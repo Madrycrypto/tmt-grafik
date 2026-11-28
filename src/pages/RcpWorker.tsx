@@ -127,7 +127,7 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
 
         {view === 'year' ? (
           <div className="scroll-x">
-            <table style={{ minWidth: 560 }}>
+            <table className="tbl-cards" style={{ minWidth: 560 }}>
               <thead>
                 <tr>
                   <th>{t('Miesiąc')}</th>
@@ -142,15 +142,15 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
                   const s = sumDays(list);
                   return (
                     <tr key={k}>
-                      <td>
+                      <td className="full">
                         <button type="button" className="link-btn" onClick={() => { setAnchor(`${anchor.slice(0, 4)}-${String(k + 1).padStart(2, '0')}-01`); setView('month'); }}>
                           {t(MONTH_NAMES[k])}
                         </button>
                       </td>
-                      <td>{fmtHM(s.planMin)}</td>
-                      <td>{fmtHM(s.workedMin)}</td>
-                      <td style={bal(s.balanceMin)}>{fmtHM(s.balanceMin, true)}</td>
-                      <td>{s.problems ? <span className="tag red">{s.problems}</span> : '—'}</td>
+                      <td data-l={t('Plan')}>{fmtHM(s.planMin)}</td>
+                      <td data-l={t('Przepracowane')}>{fmtHM(s.workedMin)}</td>
+                      <td data-l={t('Bilans')} style={bal(s.balanceMin)}>{fmtHM(s.balanceMin, true)}</td>
+                      <td data-l={t('Do poprawy')}>{s.problems ? <span className="tag red">{s.problems}</span> : '—'}</td>
                     </tr>
                   );
                 })}
@@ -159,7 +159,7 @@ export function RcpWorker({ workerId, date, onClose }: { workerId: string; date:
           </div>
         ) : (
           <div className="scroll-x">
-            <table style={{ minWidth: 640 }}>
+            <table className="tbl-cards" style={{ minWidth: 640 }}>
               <thead>
                 <tr>
                   <th>{t('Dzień')}</th>
@@ -200,8 +200,8 @@ function DayRow({ d, canEdit, locked, onEdit }: { d: DayAccount; canEdit: boolea
   const dim = idle ? { opacity: 0.55 } : undefined;
   return (
     <tr style={dim}>
-      <td style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{fmtDate(d.date)}</td>
-      <td>
+      <td className="full" style={{ whiteSpace: 'nowrap', fontWeight: 600 }}>{fmtDate(d.date)}</td>
+      <td className="full">
         {idle ? (
           <span className="sub">{t('wolne')}</span>
         ) : (
@@ -212,7 +212,7 @@ function DayRow({ d, canEdit, locked, onEdit }: { d: DayAccount; canEdit: boolea
           </span>
         )}
       </td>
-      <td style={{ whiteSpace: 'nowrap' }}>
+      <td data-l={t('Wejście / Wyjście')} className={idle ? 'hide-m' : undefined} style={{ whiteSpace: 'nowrap' }}>
         {c.punches.length ? (
           <>
             {hh(c.firstIn)} → {hh(c.lastOut)}
@@ -223,10 +223,10 @@ function DayRow({ d, canEdit, locked, onEdit }: { d: DayAccount; canEdit: boolea
           '—'
         )}
       </td>
-      <td>{c.plan ? `${fmtMin(Math.round(c.plan.start * 60))}–${fmtMin(Math.round(c.plan.end * 60))}` : '—'}</td>
-      <td>{d.workedMin ? fmtHM(d.workedMin) : '—'}</td>
-      <td style={{ color: d.balanceMin < 0 ? 'var(--red-ink)' : d.balanceMin > 0 ? 'var(--green-ink, #14532d)' : undefined, fontWeight: 600 }}>{d.balanceMin ? fmtHM(d.balanceMin, true) : '—'}</td>
-      <td>
+      <td data-l={t('Plan')} className={idle ? 'hide-m' : undefined}>{c.plan ? `${fmtMin(Math.round(c.plan.start * 60))}–${fmtMin(Math.round(c.plan.end * 60))}` : '—'}</td>
+      <td data-l={t('Przepracowane')} className={idle ? 'hide-m' : undefined}>{d.workedMin ? fmtHM(d.workedMin) : '—'}</td>
+      <td data-l={t('Bilans')} className={idle ? 'hide-m' : undefined} style={{ color: d.balanceMin < 0 ? 'var(--red-ink)' : d.balanceMin > 0 ? 'var(--green-ink, #14532d)' : undefined, fontWeight: 600 }}>{d.balanceMin ? fmtHM(d.balanceMin, true) : '—'}</td>
+      <td className="full">
         {locked && <span title={t('Miesiąc zamknięty')}>🔒</span>}
         {canEdit && (
           <button type="button" className="btn small ghost" aria-label={t('Popraw odbicia')} title={t('Popraw odbicia tego dnia')} onClick={onEdit}>

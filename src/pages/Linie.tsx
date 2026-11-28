@@ -263,7 +263,7 @@ function LineCard({ lineId }: { lineId: string }) {
         <span className="sub">{t('Nowy system (np. 2 zmiany 06–14 / 14–22) dodasz w Ustawienia → Systemy zmianowe.')}</span>
       </div>
       <div className="scroll-x">
-        <table style={{ minWidth: 560 }}>
+        <table className="tbl-cards" style={{ minWidth: 560 }}>
           <thead>
             <tr>
               <th>{t('Stanowisko')}</th>
@@ -276,7 +276,7 @@ function LineCard({ lineId }: { lineId: string }) {
           <tbody>
             {stations.map((s, i) => (
               <tr key={s.id}>
-                <td style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
+                <td className="full" style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
                   <button
                     type="button"
                     className={`star-btn ${s.special ? 'on' : ''}`}
@@ -288,10 +288,10 @@ function LineCard({ lineId }: { lineId: string }) {
                   </button>
                   <input className="input" style={{ width: '100%' }} aria-label={t('Nazwa stanowiska')} defaultValue={s.name} onBlur={(e) => e.target.value.trim() && e.target.value !== s.name && patch(s.id, { name: e.target.value.trim() })} />
                 </td>
-                <td>
+                <td data-l={t('Ludzi na godz.')}>
                   <input className="input" type="number" min={1} max={20} style={{ width: 80 }} aria-label={t('Wymagana liczba osób')} value={s.required} onChange={(e) => patch(s.id, { required: Math.max(1, Number(e.target.value) || 1) })} />
                 </td>
-                <td>
+                <td data-l={t('Min. poziom')}>
                   <select className="input" aria-label={t('Minimalny poziom')} value={s.minLevel} onChange={(e) => patch(s.id, { minLevel: Number(e.target.value) })}>
                     {[1, 2, 3, 4].map((l) => (
                       <option key={l} value={l}>
@@ -301,7 +301,7 @@ function LineCard({ lineId }: { lineId: string }) {
                     ))}
                   </select>
                 </td>
-                <td>
+                <td data-l={t('Łączy z')}>
                   <div className="row" style={{ gap: 4, alignItems: 'center' }}>
                     {stations.filter((o) => canPair(state, s.id, o.id)).map((o) => (
                       <span key={o.id} className="tag">
@@ -317,7 +317,7 @@ function LineCard({ lineId }: { lineId: string }) {
                     </select>
                   </div>
                 </td>
-                <td style={{ whiteSpace: 'nowrap' }}>
+                <td className="full" style={{ whiteSpace: 'nowrap' }}>
                   <button type="button" className="btn small ghost" aria-label={t('W górę')} disabled={i === 0} onClick={() => move(s, -1)}>↑</button>
                   <button type="button" className="btn small ghost" aria-label={t('W dół')} disabled={i === stations.length - 1} onClick={() => move(s, 1)}>↓</button>
                   <button type="button" className="btn small" onClick={() => removeStation(s)}>{t('Usuń')}</button>
