@@ -33,7 +33,7 @@ export function Icon({ name }: { name: keyof typeof PATHS | string }) {
   );
 }
 
-export function Sheet({ title, sub, onClose, children }: { title: ReactNode; sub?: ReactNode; onClose: () => void; children: ReactNode }) {
+export function Sheet({ title, sub, onClose, children, wide }: { title: ReactNode; sub?: ReactNode; onClose: () => void; children: ReactNode; wide?: boolean }) {
   useEffect(() => {
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -43,7 +43,7 @@ export function Sheet({ title, sub, onClose, children }: { title: ReactNode; sub
   }, []);
   return (
     <div className="overlay" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className={wide ? 'sheet wide' : 'sheet'} role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <div>
             <h2>{title}</h2>

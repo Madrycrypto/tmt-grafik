@@ -186,6 +186,7 @@ button.cell { cursor: pointer; }
   .overlay { align-items: flex-end; padding: 0; }
   .sheet { border-radius: 16px 16px 0 0; max-height: 92vh; padding-bottom: calc(18px + env(safe-area-inset-bottom)); }
 }
+.sheet.wide { width: min(980px, 100%); }
 .sheet-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
 
 .list-item { display: flex; align-items: center; gap: 10px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); flex-wrap: wrap; }

@@ -6,7 +6,7 @@ import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
 import { checkDay, DIR_LABEL, fmtMin, planPunches, STATUS_LABEL, STATUS_TONE } from '../domain/punches';
 import type { DayCheck, Punch } from '../domain/punches';
 import { LineOptions, TypeTag, scopeLineIds, useScope } from '../ui';
-import { WorkerEditor } from './Pracownicy';
+import { RcpWorker } from './RcpWorker';
 import TnaImport from './TnaImport';
 import TnaLive, { TnaBadge, useTna } from './TnaLive';
 import { t } from '../i18n';
@@ -281,7 +281,7 @@ export default function Rcp() {
       </section>
       {live && <TnaLive tna={tnaLive} onClose={() => setLive(false)} />}
       {tna && <TnaImport onClose={() => setTna(false)} onDone={() => void reload()} />}
-      {openWorker && <WorkerEditor workerId={openWorker} onClose={() => setOpenWorker(null)} />}
+      {openWorker && <RcpWorker workerId={openWorker} date={date} onClose={() => setOpenWorker(null)} />}
     </>
   );
 }

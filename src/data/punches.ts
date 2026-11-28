@@ -13,7 +13,7 @@ function demoAll(): Punch[] {
 }
 
 /** Odbicia z dni [from, to] (daty lokalne), odświeżane na żywo. Pracownik dostaje tylko swoje (RLS). */
-export function usePunches(from: string, to: string): { punches: Punch[]; loading: boolean; error: string | null; reload: () => Promise<void> } {
+export function usePunches(from: string, to: string, workerId?: string): { punches: Punch[]; loading: boolean; error: string | null; reload: () => Promise<void> } {
   const { backend } = useApp();
   const [punches, setPunches] = useState<Punch[]>([]);
   const [loading, setLoading] = useState(true);
@@ -22,13 +22,15 @@ export function usePunches(from: string, to: string): { punches: Punch[]; loadin
   const reload = useCallback(async () => {
     const db = backend.client;
     if (!db) {
-      setPunches(demoAll().filter((p) => p.date >= from && p.date <= to));
+      setPunches(demoAll().filter((p) => p.date >= from && p.date <= to && (!workerId || p.workerId === workerId)));
       setLoading(false);
       return;
     }
     const out: Punch[] = [];
     for (let i = 0; ; i += 1000) {
-      const { data, error: e } = await db.from('records').select('data').eq('kind', 'punches').gte('data->>date', from).lte('data->>date', to).range(i, i + 999);
+      let q = db.from('records').select('data').eq('kind', 'punches').gte('data->>date', from).lte('data->>date', to);
+      if (workerId) q = q.eq('data->>workerId', workerId);
+      const { data, error: e } = await q.range(i, i + 999);
       if (e) {
         setError(e.message);
         setLoading(false);
@@ -40,7 +42,7 @@ export function usePunches(from: string, to: string): { punches: Punch[]; loadin
     setError(null);
     setPunches(out);
     setLoading(false);
-  }, [backend, from, to]);
+  }, [backend, from, to, workerId]);
 
   useEffect(() => {
     setLoading(true);
@@ -49,12 +51,17 @@ export function usePunches(from: string, to: string): { punches: Punch[]; loadin
     if (!db) return;
     const ch = db
       .channel(`punches-${from}-${to}-${Math.random().toString(36).slice(2, 7)}`)
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: 'kind=eq.punches' }, () => void reload())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'records', filter: 'kind=eq.punches' }, (payload) => {
+        // widok jednego pracownika nie przeładowuje się przy każdym cudzym odbiciu z kiosku
+        const rec = (payload.new as { data?: { workerId?: string } } | undefined)?.data;
+        if (workerId && payload.eventType !== 'DELETE' && rec?.workerId !== workerId) return;
+        void reload();
+      })
       .subscribe();
     return () => {
       void db.removeChannel(ch);
     };
-  }, [backend, from, to, reload]);
+  }, [backend, from, to, workerId, reload]);
 
   return { punches, loading, error, reload };
 }
