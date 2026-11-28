@@ -56,6 +56,8 @@ export interface Line {
   group?: string;
   /** systemy zmianowe (wzorce) używane na linii; brak = wszystkie */
   patternIds?: string[];
+  /** kolejność wyświetlania (1, 2, 3…); brak = na końcu, alfabetycznie. Grupa idzie wg najmniejszej liczby swoich linii. */
+  order?: number;
 }
 
 export interface Station {
@@ -218,3 +220,20 @@ export const REASON_LABEL: Record<AbsenceReason, string> = {
   INNE: 'Inne',
 };
 export const LEVEL_LABEL = ['brak', 'w szkoleniu', 'pod nadzorem', 'samodzielny', 'ekspert / trener'];
+
+/** Linie w kolejności wybranej przez użytkownika: wg liczby `order`, grupa wg najmniejszej liczby jej linii. */
+export function orderLines(lines: Line[]): Line[] {
+  const key = (l: Line) => l.order ?? Infinity;
+  const gk = (l: Line) => l.group ?? `~${l.id}`;
+  const gMin = new Map<string, number>();
+  for (const l of lines) gMin.set(gk(l), Math.min(gMin.get(gk(l)) ?? Infinity, key(l)));
+  const cmp = (x: number, y: number) => (x === y ? 0 : x < y ? -1 : 1);
+  return [...lines].sort(
+    (a, b) =>
+      cmp(gMin.get(gk(a))!, gMin.get(gk(b))!) ||
+      cmp(key(a), key(b)) ||
+      Number(!a.group) - Number(!b.group) ||
+      (a.group ?? '').localeCompare(b.group ?? '', 'pl') ||
+      a.name.localeCompare(b.name, 'pl'),
+  );
+}

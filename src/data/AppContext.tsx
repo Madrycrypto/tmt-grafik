@@ -7,6 +7,7 @@ import { todayIso } from '../domain/dates';
 import { scheduleNotices } from '../domain/notify';
 import { applyChanges, diffState } from '../domain/undo';
 import type { UndoEntry } from '../domain/undo';
+import { orderLines } from '../domain/types';
 import type { AppState } from '../domain/types';
 import { applyRemote, cloudBackend, demoBackend, readCloudConfig } from './backend';
 import type { Backend } from './backend';
@@ -58,6 +59,8 @@ export function AppProvider({
     return cfg ? cloudBackend(cfg) : demoBackend();
   }, []);
   const [state, setState] = useState<AppState | null>(null);
+  // linie zawsze w kolejności z pola „Kolejność”, więc wszystkie widoki je respektują
+  const ordered = useMemo(() => (state ? { ...state, lines: orderLines(state.lines) } : null), [state]);
   const [session, setSession] = useState<Session | null>(null);
   const [authChecked, setAuthChecked] = useState(backend.mode === 'demo');
   const [sync, setSync] = useState<SyncStatus>('idle');
@@ -271,7 +274,7 @@ export function AppProvider({
   if (!state) return <div className="splash">{t('Wczytywanie…')}</div>;
 
   return (
-    <Ctx.Provider value={{ state, backend, user, session, role: role ?? 'viewer', canEdit, sync, syncError, update, replaceAll, undoLabel, redoLabel, undo, redo, reload }}>
+    <Ctx.Provider value={{ state: ordered ?? state, backend, user, session, role: role ?? 'viewer', canEdit, sync, syncError, update, replaceAll, undoLabel, redoLabel, undo, redo, reload }}>
       {children}
     </Ctx.Provider>
   );

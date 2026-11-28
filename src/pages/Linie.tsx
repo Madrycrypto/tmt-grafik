@@ -21,8 +21,8 @@ export default function Linie() {
     setNewLine('');
   };
 
-  const groups = [...state.lines]
-    .sort((a, b) => a.name.localeCompare(b.name))
+  // state.lines jest już w kolejności z pola „Kolejność”
+  const groups = state.lines
     .reduce<[string, typeof state.lines][]>((acc, l) => {
       // linia główna bez grupy (np. Injection) ma własny nagłówek zamiast „Pozostałe linie”
       const g = l.group ?? `~${l.id}`;
@@ -30,8 +30,7 @@ export default function Linie() {
       if (hit) hit[1].push(l);
       else acc.push([g, [l]]);
       return acc;
-    }, [])
-    .sort((a, b) => Number(a[0].startsWith('~')) - Number(b[0].startsWith('~')) || a[0].localeCompare(b[0]));
+    }, []);
   const [open, setOpen] = usePersistent('linie-open', groups[0]?.[0] ?? '');
 
   return (
@@ -192,6 +191,23 @@ function LineCard({ lineId }: { lineId: string }) {
               update((d) => {
                 d.lines.find((x) => x.id === lineId)!.group = g || undefined;
               }, `${line.name}: ${t('Linia główna')} → ${g || '—'}`);
+            }}
+          />
+          <input
+            className="input"
+            type="number"
+            min={1}
+            style={{ width: 90 }}
+            aria-label={t('Kolejność')}
+            placeholder={t('Kolejność')}
+            title={t('Kolejność wyświetlania: 1, 2, 3… Grupa idzie wg najmniejszej liczby swoich linii.')}
+            defaultValue={line.order ?? ''}
+            onBlur={(e) => {
+              const n = e.target.value.trim() === '' ? undefined : Math.max(1, Math.round(Number(e.target.value)));
+              if (n === line.order || (n !== undefined && Number.isNaN(n))) return;
+              update((d) => {
+                d.lines.find((x) => x.id === lineId)!.order = n;
+              }, `${line.name}: ${t('Kolejność')} → ${n ?? '—'}`);
             }}
           />
           <span className="sub">{t('{n} pracowników', { n: crew })}</span>

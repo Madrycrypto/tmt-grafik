@@ -1046,6 +1046,8 @@ export const zh: Record<string, string> = {
   'Nazwy w listach linii': '列表中的名称',
   'Cały zakład': '全厂',
   'Dopisek przy linii głównej': '主线后缀',
+  'Kolejność': '顺序',
+  'Kolejność wyświetlania: 1, 2, 3… Grupa idzie wg najmniejszej liczby swoich linii.': '显示顺序：1、2、3…分组按其产线的最小数字排序。',
   'Zostanie': '剩余',
   'Wklej z Excela': '从Excel粘贴',
   'Wpisz urlopy': '录入休假',
