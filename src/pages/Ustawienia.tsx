@@ -6,6 +6,7 @@ import { BRIGADES, OFF } from '../domain/types';
 import type { AppState, Pattern } from '../domain/types';
 import { normalize, readCloudConfig, resetDemo, writeCloudConfig } from '../data/backend';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import Access from './Access';
 import Systems from './Systems';
 import { t } from '../i18n';
@@ -215,10 +216,41 @@ export default function Ustawienia() {
         <h1>{t('Ustawienia')}</h1>
       </div>
       <Connection />
+      <ScopeLabels />
       <Access />
       <Systems />
       <ShiftsAndPatterns />
       <Data />
     </>
+  );
+}
+
+/** Nazwy zakresu w listach wyboru linii (Grafik, Urlopy, RCP, Statystyki, Matrix, Pracownicy). */
+function ScopeLabels() {
+  const { canEdit } = useApp();
+  const lb = useLabels();
+  const [plant, setPlant] = useState<string | null>(null);
+  const [suffix, setSuffix] = useState<string | null>(null);
+  const commit = async (next: { plant?: string; suffix?: string }) => {
+    try {
+      await lb.save({ ...lb.raw, ...next });
+      toast(t('Zapisano'));
+    } catch {
+      toast(t('Nie udało się zapisać'));
+    }
+  };
+  return (
+    <section className="card stack">
+      <h2>{t('Nazwy w listach linii')}</h2>
+      <div className="sub">{t('Nazwa całego zakładu i dopisek przy liniach głównych (np. „HVAC — cała linia główna”). Nazwy samych linii i grup zmienisz w Linie i stanowiska. Puste pole przywraca domyślny napis.')}</div>
+      <label className="field">
+        {t('Cały zakład')}
+        <input disabled={!canEdit} value={plant ?? lb.plant} onChange={(e) => setPlant(e.target.value)} onBlur={() => plant !== null && void commit({ plant }).then(() => setPlant(null))} />
+      </label>
+      <label className="field">
+        {t('Dopisek przy linii głównej')}
+        <input disabled={!canEdit} value={suffix ?? lb.suffix} onChange={(e) => setSuffix(e.target.value)} onBlur={() => suffix !== null && void commit({ suffix }).then(() => setSuffix(null))} />
+      </label>
+    </section>
   );
 }

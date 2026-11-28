@@ -5,6 +5,7 @@ import { buildStatsWorkbook, statsFileName } from '../domain/statsExport';
 import { downloadXlsx } from './WorkerBulk';
 import type { AttendanceRow } from '../domain/stats';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { usePunches } from '../data/punches';
 import { LineOptions, usePersistent, useScope } from '../ui';
 import { t } from '../i18n';
@@ -15,6 +16,7 @@ const tone = (rate: number) => (rate >= 0.1 ? 'red' : rate >= 0.05 ? 'amber' : '
 const REASONS = ['L4', 'UW', 'NN', 'INNE'] as const;
 
 export default function Statystyki() {
+  const lb = useLabels();
   const { state } = useApp();
   const [month, setMonth] = usePersistent('stat-month', todayIso().slice(0, 7));
   const [scope, setScope] = useScope(state);
@@ -59,10 +61,10 @@ export default function Statystyki() {
           <label className="field">
             {t('Linia')}
             <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              <option value="all">{t('cały zakład')}</option>
+              <option value="all">{lb.plant}</option>
               {groups.map((g) => (
                 <option key={g} value={`g:${g}`}>
-                  {g} — {t('cała linia główna')}
+                  {lb.main(g)}
                 </option>
               ))}
               <LineOptions state={state} />

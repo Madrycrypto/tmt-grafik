@@ -7,6 +7,7 @@ import type { RotaCell } from '../domain/rota';
 import { OFF, holidaysOff, linePatterns, patternBrigades } from '../domain/types';
 import type { AppState, BrigadeId, Exclusion, Line, Pattern } from '../domain/types';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { holidayName } from '../domain/holidays';
 import { LineOptions, usePersistent, useScope } from '../ui';
 import { monthNorm } from '../domain/norm';
@@ -19,6 +20,7 @@ import { t } from '../i18n';
 
 
 export default function Grafik() {
+  const lb = useLabels();
   const { state, update, undo } = useApp();
   const [month, setMonth] = useState(todayIso().slice(0, 7));
   const [scope, setScope] = useScope(state);
@@ -132,10 +134,10 @@ export default function Grafik() {
           <label className="field">
             {t('Linia')}
             <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              <option value="all">{t('cały zakład')}</option>
+              <option value="all">{lb.plant}</option>
               {groups.map((g) => (
                 <option key={g} value={`g:${g}`}>
-                  {g} — {t('cała linia główna')}
+                  {lb.main(g)}
                 </option>
               ))}
               <LineOptions state={state} />

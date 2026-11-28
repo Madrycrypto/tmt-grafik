@@ -11,6 +11,7 @@ import { BRIGADES, REASON_LABEL, TYPE_LABEL, canPair, linePatterns, patternBriga
 import type { AbsenceReason, Worker, WorkerType } from '../domain/types';
 import { workersCsv } from '../domain/workerImport';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { DeadlinesCard, Icon, Sheet, TypeTag, LineOptions, scopeLineIds, useScope } from '../ui';
 import { BulkButtons, ImportSheet, RemoveListSheet, downloadCsv } from './WorkerBulk';
 import HrExportSheet from './HrExport';
@@ -389,6 +390,7 @@ export function WorkerEditor({ workerId, onClose }: { workerId: string; onClose:
 }
 
 export default function Pracownicy() {
+  const lb = useLabels();
   const { state, update } = useApp();
   const [editing, setEditing] = useState<Worker | null>(null);
   const [query, setQuery] = useState('');
@@ -536,7 +538,7 @@ export default function Pracownicy() {
               <option value="all">{t('wszystkie')}</option>
               {[...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))].map((g) => (
                 <option key={g} value={`g:${g}`}>
-                  {g} — {t('cała linia główna')}
+                  {lb.main(g)}
                 </option>
               ))}
               <LineOptions state={state} />

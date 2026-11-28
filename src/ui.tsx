@@ -275,7 +275,12 @@ export function LineOptions({ state }: { state: AppState }) {
             {opts}
           </optgroup>
         ) : (
-          opts
+          // linia główna bez grupy (np. Injection) wygląda jak grupa HVAC czy CFM
+          ls.map((l) => (
+            <optgroup key={l.id} label={l.name}>
+              <option value={l.id}>{l.name}</option>
+            </optgroup>
+          ))
         );
       })}
     </>

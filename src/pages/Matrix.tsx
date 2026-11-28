@@ -4,6 +4,7 @@ import { level } from '../domain/coverage';
 import { autoAssign } from '../domain/autoAssign';
 import { BRIGADES, LEVEL_LABEL } from '../domain/types';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { Level, LevelPicker, LineSelect, TypeTag, useLine, usePersistent } from '../ui';
 import { t } from '../i18n';
 import { WorkerEditor } from './Pracownicy';
@@ -12,6 +13,7 @@ import { missingCsv, missingRows } from '../domain/training';
 import { downloadCsv } from './WorkerBulk';
 
 export default function Matrix() {
+  const lb = useLabels();
   const { state, update, undo, canEdit, backend } = useApp();
   const { records } = useTraining();
   // znacznik braku dokumentu pokazujemy tylko z bazą; w trybie demo nie ma skąd wziąć wpisów
@@ -113,7 +115,7 @@ export default function Matrix() {
             <select value={view} onChange={(e) => setView(e.target.value as 'line' | 'group' | 'plant')}>
               <option value="line">{t('jedna linia')}</option>
               <option value="group" disabled={!line?.group}>{line?.group ? t('linia główna: {g}', { g: line.group }) : t('linia główna')}</option>
-              <option value="plant">{t('cały zakład')}</option>
+              <option value="plant">{lb.plant}</option>
             </select>
           </label>
           {view !== 'plant' && <LineSelect state={state} value={lineId} onChange={setLineId} />}

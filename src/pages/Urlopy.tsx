@@ -9,6 +9,7 @@ import { fmtDate } from '../domain/dates';
 import { plannedShift } from '../domain/coverage';
 import { shiftDef } from '../domain/rota';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { LineOptions, usePersistent, useScope } from '../ui';
 import type { AppState, Worker } from '../domain/types';
 import { t } from '../i18n';
@@ -20,6 +21,7 @@ const OFF_TINT = 'rgba(214, 69, 69, 0.09)';
 const isOffDay = (d: string) => weekday(d) === 0 || weekday(d) === 6 || !!holidayName(d);
 
 export default function Urlopy() {
+  const lb = useLabels();
   const { state, update, canEdit } = useApp();
   const [month, setMonth] = usePersistent('urlopy-month', todayIso().slice(0, 7));
   const [scope, setScope] = useScope(state);
@@ -72,10 +74,10 @@ export default function Urlopy() {
           <label className="field">
             {t('Linia')}
             <select value={scope} onChange={(e) => setScope(e.target.value)}>
-              <option value="all">{t('cały zakład')}</option>
+              <option value="all">{lb.plant}</option>
               {groups.map((g) => (
                 <option key={g} value={`g:${g}`}>
-                  {g} — {t('cała linia główna')}
+                  {lb.main(g)}
                 </option>
               ))}
               <LineOptions state={state} />

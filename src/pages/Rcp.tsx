@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import { useApp } from '../data/AppContext';
+import { useLabels } from '../data/labels';
 import { deletePunch, savePunch, savePunches, usePunches } from '../data/punches';
 import { toast } from '../toast';
 import { addDays, fmtDate, fmtRange, todayIso } from '../domain/dates';
@@ -54,6 +55,7 @@ function AddPunch({ row, onAdd }: { row: DayCheck; onAdd: (dir: 'in' | 'out', hh
 
 /** Panel RCP: grafik kontra odbicia z kiosku na wybrany dzień. */
 export default function Rcp() {
+  const lb = useLabels();
   const { state, backend, update, canEdit } = useApp();
   const [date, setDate] = useState(todayIso());
   const [lineId, setLineId] = useScope(state);
@@ -154,7 +156,7 @@ export default function Rcp() {
               <option value="all">{t('wszystkie')}</option>
               {[...new Set(state.lines.map((l) => l.group).filter((g): g is string => !!g))].map((g) => (
                 <option key={g} value={`g:${g}`}>
-                  {g} — {t('cała linia główna')}
+                  {lb.main(g)}
                 </option>
               ))}
               <LineOptions state={state} />
